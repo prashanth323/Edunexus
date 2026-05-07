@@ -10,7 +10,7 @@ import {
   getSortedRowModel,
   getFilteredRowModel,
 } from "@tanstack/react-table"
-import { Plus, Search, MoreHorizontal, ArrowUpDown, Loader2, X, GraduationCap } from "lucide-react"
+import { Plus, Search, MoreHorizontal, ArrowUpDown, Loader2, X, GraduationCap, FileUp } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -41,6 +41,7 @@ import { ManageClassesPanel } from "../components/ManageClassesDialog"
 import { useAuth } from "@/features/auth/hooks/useAuth"
 import { inviteSchoolUsers, type SchoolInviteRow, type ParentInvitePayload } from "@/features/invites/api/invites.api"
 import { toast } from "sonner"
+import { BulkImportDialog, type CSVColumn } from "@/components/common/BulkImportDialog"
 
 /** Stable when the query has no `data` yet — a fresh `[]` each render makes `useReactTable` think data changed every time (infinite re-renders). */
 const EMPTY_STUDENTS: Student[] = []
@@ -170,7 +171,7 @@ export function StudentsList() {
   const [singleLast, setSingleLast] = useState("")
   const [admissionNo, setAdmissionNo] = useState("")
   const [autoAdmission, setAutoAdmission] = useState(true)
-  const [bulkText, setBulkText] = useState("")
+  const [bulkImportOpen, setBulkImportOpen] = useState(false)
 
   const [g1Email, setG1Email] = useState("")
   const [g1First, setG1First] = useState("")
@@ -266,7 +267,6 @@ export function StudentsList() {
         setSingleLast("")
         setAdmissionNo("")
         setAutoAdmission(true)
-        setBulkText("")
         setG1Email("")
         setG1First("")
         setG1Last("")
@@ -364,14 +364,21 @@ export function StudentsList() {
     ])
   }
 
-  async function handleBulkStudents() {
-    const rows = parseStudentBulk(bulkText)
-    if (!rows.length) {
-      toast.error("Add lines: email,first_name,last_name[,admission_no]. Omit admission to auto-generate.")
-      return
-    }
+  const STUDENT_CSV_COLUMNS: CSVColumn[] = [
+    { key: "email", label: "Email", required: true },
+    { key: "first_name", label: "First Name", required: true },
+    { key: "last_name", label: "Last Name", required: true },
+    { key: "admission_no", label: "Admission No", required: false, description: "Omit to auto-generate" },
+  ]
+
+  const STUDENT_TEMPLATE_ROWS = [
+    ["amy.lee@school.edu", "Amy", "Lee", ""],
+    ["bo.chan@school.edu", "Bo", "Chan", "2500001"],
+  ]
+
+  async function handleBulkImport(data: any[]) {
     await submitStudentInvites(
-      rows.map((r) => ({
+      data.map((r) => ({
         email: r.email,
         first_name: r.first_name,
         last_name: r.last_name,
@@ -593,26 +600,35 @@ export function StudentsList() {
               </Button>
             </form>
 
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Bulk (CSV lines)</p>
-              <p className="text-xs text-muted-foreground">
-                email,first_name,last_name[,admission_no] — blank admission uses auto-generate.
-              </p>
-              <textarea
-                className="w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
-                placeholder={"student@school.edu,Amy,Lee\nstudent2@school.edu,Bo,Chan,2500001"}
-                value={bulkText}
-                onChange={(e) => setBulkText(e.target.value)}
-              />
-              <Button type="button" variant="secondary" disabled={inviteSubmitting} onClick={handleBulkStudents}>
-                Send bulk invites
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>,
-      document.body,
-    )
+              <div className="pt-4 border-t">
+                <p className="text-sm font-medium mb-2">Bulk import students</p>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Upload a CSV file to invite multiple students at once. 
+                </p>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  className="w-full gap-2" 
+                  onClick={() => setBulkImportOpen(true)}
+                >
+                  <FileUp className="h-4 w-4" />
+                  Upload CSV File
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+          <BulkImportDialog
+            open={bulkImportOpen}
+            onOpenChange={setBulkImportOpen}
+            title="Import Students"
+            description="Bulk invite students by uploading a CSV file. We'll send them invitations automatically."
+            columns={STUDENT_CSV_COLUMNS}
+            templateRows={STUDENT_TEMPLATE_ROWS}
+            onUpload={handleBulkImport}
+          />
+        </div>,
+        document.body,
+      )
 
   const manageClassesModal =
     manageClassesOpen &&

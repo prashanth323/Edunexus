@@ -1,6 +1,6 @@
 import { useRef, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { Search, Plus, Mail, Phone, Building, Briefcase, Loader2, MoreVertical, X } from "lucide-react"
+import { Search, Plus, Mail, Phone, Building, Briefcase, Loader2, MoreVertical, X, FileUp } from "lucide-react"
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { StaffDirectorySkeletonGrid } from "@/components/ui/card-skeleton"
@@ -21,6 +21,7 @@ import { StaffMemberDetailModal } from "../components/StaffMemberDetailModal"
 import { inviteSchoolUsers } from "@/features/invites/api/invites.api"
 import { PRINCIPAL_INVITE_STAFF_ROLES, formatSchoolRoleLabel } from "@/config/school-roles"
 import { toast } from "sonner"
+import { BulkImportDialog, type CSVColumn } from "@/components/common/BulkImportDialog"
 
 function parseStaffBulk(text: string) {
   const lines = text
@@ -48,8 +49,7 @@ export function StaffDirectory() {
   const [singleFirst, setSingleFirst] = useState("")
   const [singleLast, setSingleLast] = useState("")
   const [singleRole, setSingleRole] = useState<string>(PRINCIPAL_INVITE_STAFF_ROLES[0] ?? "teacher")
-  const [bulkText, setBulkText] = useState("")
-  const bulkRef = useRef<HTMLTextAreaElement>(null)
+  const [bulkImportOpen, setBulkImportOpen] = useState(false)
   const [detailMember, setDetailMember] = useState<StaffMember | null>(null)
 
   const { data: staff = [], isLoading } = useQuery({
@@ -96,7 +96,6 @@ export function StaffDirectory() {
         setSingleEmail("")
         setSingleFirst("")
         setSingleLast("")
-        setBulkText("")
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Invite failed")
@@ -122,13 +121,20 @@ export function StaffDirectory() {
     ])
   }
 
-  async function handleBulkSubmit() {
-    const rows = parseStaffBulk(bulkText)
-    if (!rows.length) {
-      toast.error("Add at least one CSV line: email,first_name,last_name,role")
-      return
-    }
-    await submitInvites(rows.map((r) => ({ ...r })))
+  const STAFF_CSV_COLUMNS: CSVColumn[] = [
+    { key: "email", label: "Email", required: true },
+    { key: "first_name", label: "First Name", required: true },
+    { key: "last_name", label: "Last Name", required: true },
+    { key: "role", label: "Role", required: true, description: "e.g. teacher, librarian, etc." },
+  ]
+
+  const STAFF_TEMPLATE_ROWS = [
+    ["jane.smith@school.edu", "Jane", "Smith", "teacher"],
+    ["john.doe@school.edu", "John", "Doe", "school_admin"],
+  ]
+
+  async function handleBulkImport(data: any[]) {
+    await submitInvites(data.map((r) => ({ ...r })))
   }
 
   if (isLoading) {
@@ -210,23 +216,34 @@ export function StaffDirectory() {
                 </Button>
               </form>
 
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Bulk (CSV lines)</p>
-                <p className="text-xs text-muted-foreground">Format per line: email,first_name,last_name,role</p>
-                <textarea
-                  ref={bulkRef}
-                  className="w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
-                  placeholder="teacher@school.edu,Jane,Smith,teacher"
-                  value={bulkText}
-                  onChange={(e) => setBulkText(e.target.value)}
-                />
-                <Button type="button" variant="secondary" disabled={inviteSubmitting} onClick={handleBulkSubmit}>
-                  Send bulk invites
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                <div className="pt-4 border-t">
+                  <p className="text-sm font-medium mb-2">Bulk import employees</p>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Upload a CSV file to invite multiple staff members at once. 
+                  </p>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    className="w-full gap-2" 
+                    onClick={() => setBulkImportOpen(true)}
+                  >
+                    <FileUp className="h-4 w-4" />
+                    Upload CSV File
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <BulkImportDialog
+              open={bulkImportOpen}
+              onOpenChange={setBulkImportOpen}
+              title="Import Employees"
+              description="Bulk invite school staff by uploading a CSV file. We'll send them invitations automatically."
+              columns={STAFF_CSV_COLUMNS}
+              templateRows={STAFF_TEMPLATE_ROWS}
+              onUpload={handleBulkImport}
+            />
+          </div>
       )}
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
