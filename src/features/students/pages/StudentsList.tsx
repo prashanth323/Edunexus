@@ -1,0 +1,766 @@
+import { useMemo, useState } from "react"
+import { createPortal } from "react-dom"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import type { ColumnDef, SortingState, ColumnFiltersState } from "@tanstack/react-table"
+import {
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+  getPaginationRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+} from "@tanstack/react-table"
+import { Plus, Search, MoreHorizontal, ArrowUpDown, Loader2, X, GraduationCap } from "lucide-react"
+
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Badge } from "@/components/ui/badge"
+import { flattenSectionOptionsForCurrentYear, getCurrentAcademicYearMeta } from "../api/academics.api"
+import { getStudents, type Student } from "../api/students.api"
+import { AssignSectionDropdownItems } from "../components/AssignSectionDropdown"
+import { ManageClassesPanel } from "../components/ManageClassesDialog"
+import { useAuth } from "@/features/auth/hooks/useAuth"
+import { inviteSchoolUsers, type SchoolInviteRow, type ParentInvitePayload } from "@/features/invites/api/invites.api"
+import { toast } from "sonner"
+
+/** Stable when the query has no `data` yet — a fresh `[]` each render makes `useReactTable` think data changed every time (infinite re-renders). */
+const EMPTY_STUDENTS: Student[] = []
+
+/** Matches RLS: `principal` and `school_admin` may write classes / sections / enrollments. */
+const CAN_MANAGE_ACADEMICS = new Set(["principal", "school_admin"])
+
+function baseStudentColumns(): ColumnDef<Student>[] {
+  return [
+    {
+      accessorKey: "admission_no",
+      header: "Adm. No",
+    },
+    {
+      accessorFn: (row) => `${row.first_name} ${row.last_name}`,
+      id: "name",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Student Name
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
+      cell: ({ row }) => <div className="font-medium px-4">{row.getValue("name")}</div>,
+    },
+    {
+      id: "class_section",
+      header: "Class & Section",
+      cell: ({ row }) => {
+        const student = row.original
+        const className = student.classes?.name || "N/A"
+        const sectionName = student.sections?.name || "N/A"
+        return (
+          <div>
+            {className} - {sectionName}
+          </div>
+        )
+      },
+    },
+    {
+      accessorKey: "gender",
+      header: "Gender",
+      cell: ({ row }) => (
+        <div className="capitalize">{(row.getValue("gender") as string | null) ?? "—"}</div>
+      ),
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => {
+        const status = row.getValue("status") as string
+        return (
+          <Badge variant={status === "active" ? "default" : "secondary"} className="capitalize">
+            {status}
+          </Badge>
+        )
+      },
+    },
+  ]
+}
+
+function StudentRowActions({
+  student,
+  assignProps,
+}: {
+  student: Student
+  assignProps: { enabled: boolean; schoolId: string | undefined }
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="h-8 w-8 p-0">
+          <span className="sr-only">Open menu</span>
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+        <DropdownMenuItem onClick={() => navigator.clipboard.writeText(student.id)}>
+          Copy Student ID
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem disabled>View Profile</DropdownMenuItem>
+        <DropdownMenuItem disabled>Edit Details</DropdownMenuItem>
+        <DropdownMenuItem className="text-destructive" disabled>
+          Archive Student
+        </DropdownMenuItem>
+        <AssignSectionDropdownItems student={student} dropdownProps={assignProps} />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function parseStudentBulk(text: string) {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+  const rows: { email: string; first_name: string; last_name: string; admission_no?: string }[] = []
+  for (const line of lines) {
+    const parts = line.split(",").map((p) => p.trim())
+    if (parts.length < 3) continue
+    const [email, first_name, last_name, admission_no] = parts
+    if (!email) continue
+    rows.push({ email, first_name, last_name, admission_no: admission_no || undefined })
+  }
+  return rows
+}
+
+export function StudentsList() {
+  const activeSchoolId = useAuth((state) => state.activeSchoolId)
+  const activeRole = useAuth((state) => state.activeRole)
+  const queryClient = useQueryClient()
+  const [sorting, setSorting] = useState<SortingState>([])
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [globalFilter, setGlobalFilter] = useState("")
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [manageClassesOpen, setManageClassesOpen] = useState(false)
+  const [inviteSubmitting, setInviteSubmitting] = useState(false)
+  const [inviteSectionId, setInviteSectionId] = useState("")
+  const [singleEmail, setSingleEmail] = useState("")
+  const [singleFirst, setSingleFirst] = useState("")
+  const [singleLast, setSingleLast] = useState("")
+  const [admissionNo, setAdmissionNo] = useState("")
+  const [autoAdmission, setAutoAdmission] = useState(true)
+  const [bulkText, setBulkText] = useState("")
+
+  const [g1Email, setG1Email] = useState("")
+  const [g1First, setG1First] = useState("")
+  const [g1Last, setG1Last] = useState("")
+  const [g1Phone, setG1Phone] = useState("")
+  const [g1Relation, setG1Relation] = useState("father")
+  const [g1Primary, setG1Primary] = useState(true)
+
+  const [g2Email, setG2Email] = useState("")
+  const [g2First, setG2First] = useState("")
+  const [g2Last, setG2Last] = useState("")
+  const [g2Phone, setG2Phone] = useState("")
+  const [g2Relation, setG2Relation] = useState("mother")
+  const [g2Primary, setG2Primary] = useState(false)
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["students", activeSchoolId],
+    queryFn: () => getStudents(activeSchoolId!),
+    enabled: !!activeSchoolId,
+  })
+
+  const students = data ?? EMPTY_STUDENTS
+
+  const canManageAcademics = CAN_MANAGE_ACADEMICS.has(activeRole ?? "")
+
+  const assignSectionProps = useMemo(
+    () => ({
+      enabled: canManageAcademics,
+      schoolId: activeSchoolId ?? undefined,
+    }),
+    [canManageAcademics, activeSchoolId],
+  )
+
+  const columns = useMemo(
+    (): ColumnDef<Student>[] => [
+      ...baseStudentColumns(),
+      {
+        id: "actions",
+        cell: ({ row }) => (
+          <StudentRowActions student={row.original} assignProps={assignSectionProps} />
+        ),
+      },
+    ],
+    [assignSectionProps],
+  )
+
+  const { data: ayMetaForManage } = useQuery({
+    queryKey: ["academic-year-meta-manage-classes", activeSchoolId, manageClassesOpen],
+    queryFn: () => getCurrentAcademicYearMeta(activeSchoolId!),
+    enabled: !!activeSchoolId && canManageAcademics && manageClassesOpen,
+  })
+
+  const { data: inviteSectionOptions = [], isFetching: inviteSectionsLoading } = useQuery({
+    queryKey: ["section-options", activeSchoolId],
+    queryFn: () => flattenSectionOptionsForCurrentYear(activeSchoolId!),
+    enabled: !!activeSchoolId && inviteOpen && canManageAcademics,
+    staleTime: 15_000,
+  })
+
+  const table = useReactTable({
+    data: students,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    onSortingChange: setSorting,
+    getSortedRowModel: getSortedRowModel(),
+    onColumnFiltersChange: setColumnFilters,
+    getFilteredRowModel: getFilteredRowModel(),
+    state: {
+      sorting,
+      columnFilters,
+      globalFilter,
+    },
+    onGlobalFilterChange: setGlobalFilter,
+  })
+
+  const openStudentInvite = () => setInviteOpen(true)
+
+  async function submitStudentInvites(invitations: SchoolInviteRow[]) {
+    if (!activeSchoolId) return
+    setInviteSubmitting(true)
+    try {
+      const res = await inviteSchoolUsers({ schoolId: activeSchoolId, invitations })
+      const failed = res.results.filter((r) => !r.ok)
+      failed.forEach((f) => toast.error(`${f.email}: ${f.error ?? "Failed"}`))
+      const okCount = res.results.filter((r) => r.ok).length
+      if (okCount) toast.success(`Sent ${okCount} invitation(s).`)
+      if (okCount) {
+        await queryClient.invalidateQueries({ queryKey: ["students", activeSchoolId] })
+        setInviteOpen(false)
+        setSingleEmail("")
+        setSingleFirst("")
+        setSingleLast("")
+        setAdmissionNo("")
+        setAutoAdmission(true)
+        setBulkText("")
+        setG1Email("")
+        setG1First("")
+        setG1Last("")
+        setG1Phone("")
+        setG1Relation("father")
+        setG1Primary(true)
+        setG2Email("")
+        setG2First("")
+        setG2Last("")
+        setG2Phone("")
+        setG2Relation("mother")
+        setG2Primary(false)
+        setInviteSectionId("")
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Invite failed")
+    } finally {
+      setInviteSubmitting(false)
+    }
+  }
+
+  async function handleSingleStudent(e: React.FormEvent) {
+    e.preventDefault()
+    const email = singleEmail.trim().toLowerCase()
+    if (!email) {
+      toast.error("Email is required")
+      return
+    }
+    if (!autoAdmission && !admissionNo.trim()) {
+      toast.error("Admission number is required when auto-generate is off")
+      return
+    }
+
+    const parents: ParentInvitePayload[] = []
+
+    const addGuardian = (
+      gEmail: string,
+      gFirst: string,
+      gLast: string,
+      gPhone: string,
+      relation: string,
+      isPrimary: boolean,
+    ) => {
+      const em = gEmail.trim().toLowerCase()
+      if (!em) return
+      if (em === email) {
+        toast.error("Guardian email cannot match the student email")
+        throw new Error("validation")
+      }
+      if (!gPhone.trim()) {
+        toast.error(`Phone is required for guardian ${em}`)
+        throw new Error("validation")
+      }
+      parents.push({
+        email: em,
+        first_name: gFirst.trim() || undefined,
+        last_name: gLast.trim() || undefined,
+        phone: gPhone.trim(),
+        relation: relation.trim() || "guardian",
+        is_primary: isPrimary,
+      })
+    }
+
+    try {
+      addGuardian(g1Email, g1First, g1Last, g1Phone, g1Relation, g1Primary)
+      addGuardian(g2Email, g2First, g2Last, g2Phone, g2Relation, g2Primary)
+    } catch (e) {
+      if (e instanceof Error && e.message === "validation") return
+      throw e
+    }
+
+    const guardianEmails = parents.map((p) => p.email)
+    if (new Set(guardianEmails).size !== guardianEmails.length) {
+      toast.error("Guardian emails must be different from each other")
+      return
+    }
+
+    const primaryCount = parents.filter((p) => p.is_primary).length
+    if (primaryCount > 1) {
+      toast.error("Mark only one guardian as primary contact")
+      return
+    }
+
+    await submitStudentInvites([
+      {
+        email,
+        first_name: singleFirst.trim(),
+        last_name: singleLast.trim(),
+        role: "student",
+        admission_no: autoAdmission ? undefined : admissionNo.trim(),
+        auto_admission_no: autoAdmission,
+        parents: parents.length ? parents : undefined,
+        ...(inviteSectionId ? { section_id: inviteSectionId } : {}),
+      },
+    ])
+  }
+
+  async function handleBulkStudents() {
+    const rows = parseStudentBulk(bulkText)
+    if (!rows.length) {
+      toast.error("Add lines: email,first_name,last_name[,admission_no]. Omit admission to auto-generate.")
+      return
+    }
+    await submitStudentInvites(
+      rows.map((r) => ({
+        email: r.email,
+        first_name: r.first_name,
+        last_name: r.last_name,
+        role: "student" as const,
+        admission_no: r.admission_no,
+        auto_admission_no: !r.admission_no?.trim(),
+      })),
+    )
+  }
+
+  const inviteModal =
+    inviteOpen &&
+    createPortal(
+      <div
+        className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm"
+        role="presentation"
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) setInviteOpen(false)
+        }}
+      >
+        <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-lg border">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <div>
+              <h2 className="text-lg font-semibold">Invite students</h2>
+              <p className="text-sm text-muted-foreground">
+                Sends login emails for the student and optional guardians (parent accounts linked in the directory).
+              </p>
+            </div>
+            <Button variant="ghost" size="icon" type="button" onClick={() => setInviteOpen(false)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <form onSubmit={handleSingleStudent} className="space-y-3">
+              <p className="text-sm font-medium">Single student</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="sm:col-span-2 space-y-1.5">
+                  <Label htmlFor="stu-email">Email</Label>
+                  <Input
+                    id="stu-email"
+                    type="email"
+                    value={singleEmail}
+                    onChange={(e) => setSingleEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="stu-fn">First name</Label>
+                  <Input id="stu-fn" value={singleFirst} onChange={(e) => setSingleFirst(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="stu-ln">Last name</Label>
+                  <Input id="stu-ln" value={singleLast} onChange={(e) => setSingleLast(e.target.value)} />
+                </div>
+                <div className="sm:col-span-2 flex items-center gap-2">
+                  <input
+                    id="stu-auto"
+                    type="checkbox"
+                    checked={autoAdmission}
+                    onChange={(e) => setAutoAdmission(e.target.checked)}
+                  />
+                  <Label htmlFor="stu-auto" className="font-normal cursor-pointer">
+                    Auto-generate admission number
+                  </Label>
+                </div>
+                {!autoAdmission && (
+                  <div className="sm:col-span-2 space-y-1.5">
+                    <Label htmlFor="stu-adm">Admission number</Label>
+                    <Input id="stu-adm" value={admissionNo} onChange={(e) => setAdmissionNo(e.target.value)} />
+                  </div>
+                )}
+              </div>
+
+              {canManageAcademics ? (
+                <div className="space-y-2">
+                  <Label htmlFor="invite-section">Assign to section (optional, current academic year)</Label>
+                  <select
+                    id="invite-section"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={inviteSectionId}
+                    onChange={(e) => setInviteSectionId(e.target.value)}
+                    disabled={inviteSectionsLoading}
+                  >
+                    <option value="">Not enrolled yet</option>
+                    {[...inviteSectionOptions]
+                      .sort((a, b) => a.label.localeCompare(b.label))
+                      .map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.label}
+                        </option>
+                      ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    Create grades and sections with “Manage classes” on this page header.
+                  </p>
+                </div>
+              ) : null}
+
+              <div className="border-t pt-4 space-y-4">
+                <p className="text-sm font-medium">Guardians (optional)</p>
+                <p className="text-xs text-muted-foreground">
+                  Add up to two parents or guardians. Each needs a unique email and phone; they receive a parent login
+                  invite.
+                </p>
+
+                <div className="rounded-lg border p-3 space-y-3 bg-muted/30">
+                  <p className="text-xs font-medium text-muted-foreground">Guardian 1</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="sm:col-span-2 space-y-1.5">
+                      <Label htmlFor="g1-email">Email</Label>
+                      <Input
+                        id="g1-email"
+                        type="email"
+                        value={g1Email}
+                        onChange={(e) => setG1Email(e.target.value)}
+                        autoComplete="off"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="g1-fn">First name</Label>
+                      <Input id="g1-fn" value={g1First} onChange={(e) => setG1First(e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="g1-ln">Last name</Label>
+                      <Input id="g1-ln" value={g1Last} onChange={(e) => setG1Last(e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="g1-phone">Phone</Label>
+                      <Input id="g1-phone" value={g1Phone} onChange={(e) => setG1Phone(e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="g1-rel">Relation</Label>
+                      <select
+                        id="g1-rel"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={g1Relation}
+                        onChange={(e) => setG1Relation(e.target.value)}
+                      >
+                        <option value="father">Father</option>
+                        <option value="mother">Mother</option>
+                        <option value="guardian">Guardian</option>
+                      </select>
+                    </div>
+                    <div className="sm:col-span-2 flex items-center gap-2">
+                      <input
+                        id="g1-primary"
+                        type="checkbox"
+                        checked={g1Primary}
+                        onChange={(e) => {
+                          setG1Primary(e.target.checked)
+                          if (e.target.checked) setG2Primary(false)
+                        }}
+                      />
+                      <Label htmlFor="g1-primary" className="font-normal cursor-pointer">
+                        Primary contact
+                      </Label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border p-3 space-y-3 bg-muted/30">
+                  <p className="text-xs font-medium text-muted-foreground">Guardian 2</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="sm:col-span-2 space-y-1.5">
+                      <Label htmlFor="g2-email">Email</Label>
+                      <Input
+                        id="g2-email"
+                        type="email"
+                        value={g2Email}
+                        onChange={(e) => setG2Email(e.target.value)}
+                        autoComplete="off"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="g2-fn">First name</Label>
+                      <Input id="g2-fn" value={g2First} onChange={(e) => setG2First(e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="g2-ln">Last name</Label>
+                      <Input id="g2-ln" value={g2Last} onChange={(e) => setG2Last(e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="g2-phone">Phone</Label>
+                      <Input id="g2-phone" value={g2Phone} onChange={(e) => setG2Phone(e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="g2-rel">Relation</Label>
+                      <select
+                        id="g2-rel"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={g2Relation}
+                        onChange={(e) => setG2Relation(e.target.value)}
+                      >
+                        <option value="father">Father</option>
+                        <option value="mother">Mother</option>
+                        <option value="guardian">Guardian</option>
+                      </select>
+                    </div>
+                    <div className="sm:col-span-2 flex items-center gap-2">
+                      <input
+                        id="g2-primary"
+                        type="checkbox"
+                        checked={g2Primary}
+                        onChange={(e) => {
+                          setG2Primary(e.target.checked)
+                          if (e.target.checked) setG1Primary(false)
+                        }}
+                      />
+                      <Label htmlFor="g2-primary" className="font-normal cursor-pointer">
+                        Primary contact
+                      </Label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <Button type="submit" disabled={inviteSubmitting}>
+                {inviteSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send invite"}
+              </Button>
+            </form>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Bulk (CSV lines)</p>
+              <p className="text-xs text-muted-foreground">
+                email,first_name,last_name[,admission_no] — blank admission uses auto-generate.
+              </p>
+              <textarea
+                className="w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
+                placeholder={"student@school.edu,Amy,Lee\nstudent2@school.edu,Bo,Chan,2500001"}
+                value={bulkText}
+                onChange={(e) => setBulkText(e.target.value)}
+              />
+              <Button type="button" variant="secondary" disabled={inviteSubmitting} onClick={handleBulkStudents}>
+                Send bulk invites
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>,
+      document.body,
+    )
+
+  const manageClassesModal =
+    manageClassesOpen &&
+    canManageAcademics &&
+    activeSchoolId &&
+    createPortal(
+      <div
+        className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm"
+        role="presentation"
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) setManageClassesOpen(false)
+        }}
+      >
+        <Card className="w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-lg border">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <div>
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <GraduationCap className="h-5 w-5" /> Manage classes &amp; sections
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Principals define grade levels (classes), then sections (A/B/…) within the active academic year.
+              </p>
+            </div>
+            <Button variant="ghost" size="icon" type="button" onClick={() => setManageClassesOpen(false)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <ManageClassesPanel
+              schoolId={activeSchoolId}
+              academicYearId={ayMetaForManage?.id ?? null}
+              academicYearLabel={ayMetaForManage?.label ?? "Loading…"}
+            />
+          </CardContent>
+        </Card>
+      </div>,
+      document.body,
+    )
+
+  return (
+    <div className="flex flex-col gap-6 animate-in fade-in duration-500">
+      {inviteModal}
+      {manageClassesModal}
+
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Students</h1>
+          <p className="text-muted-foreground mt-1">Manage student directory, admissions, and profiles.</p>
+        </div>
+        <div className="flex flex-wrap gap-2 shrink-0 justify-end">
+          {canManageAcademics ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              onClick={() => setManageClassesOpen(true)}
+              title="Add classes and sections"
+            >
+              <GraduationCap className="h-4 w-4" /> Manage classes
+            </Button>
+          ) : null}
+          <Button
+            className="shrink-0 gap-2"
+            type="button"
+            disabled={isLoading}
+            onClick={openStudentInvite}
+            title={isLoading ? "Loading students…" : undefined}
+          >
+            <Plus className="h-4 w-4" /> Add student
+          </Button>
+        </div>
+      </div>
+
+      <div className="rounded-md border bg-card text-card-foreground shadow-sm">
+        <div className="p-4 flex items-center justify-between">
+          <div className="relative w-full max-w-sm">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search students..."
+              value={globalFilter ?? ""}
+              onChange={(event) => setGlobalFilter(String(event.target.value))}
+              className="pl-9"
+            />
+          </div>
+        </div>
+
+        <div className="border-t">
+          <Table>
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => {
+                    return (
+                      <TableHead key={header.id}>
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(header.column.columnDef.header, header.getContext())}
+                      </TableHead>
+                    )
+                  })}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                Array.from({ length: 8 }, (_, i) => (
+                  <TableRow key={`sk-${i}`}>
+                    {columns.map((_, ci) => (
+                      <TableCell key={ci}>
+                        <Skeleton className="h-4 w-full min-w-[3rem]" />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : table.getRowModel().rows?.length ? (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={columns.length} className="h-48 text-center">
+                    <div className="flex flex-col items-center justify-center text-muted-foreground">
+                      <p>No students found.</p>
+                      <Button variant="link" className="mt-2" type="button" onClick={openStudentInvite}>
+                        Invite your first student
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+        <div className="flex items-center justify-end space-x-2 p-4 border-t">
+          <Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+            Previous
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+            Next
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
