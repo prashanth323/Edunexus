@@ -10,7 +10,9 @@ import {
   Table as TableIcon,
   X,
   ChevronRight,
-  Info
+  Info,
+  Trash2,
+  Plus
 } from "lucide-react"
 import {
   Dialog,
@@ -21,6 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
@@ -104,16 +107,12 @@ export function BulkImportDialog({
     })
   }
 
-  const validateAndPreview = (data: any[]) => {
+  const validateData = (data: any[]) => {
     const newErrors: { row: number; column: string; message: string }[] = []
-    const validatedData = data.map((row, index) => {
-      const rowData: any = {}
+    data.forEach((row, index) => {
       columns.forEach(col => {
-        // Find the value by matching the label (CSV header) or the key
-        const value = row[col.label] || row[col.key] || ""
-        rowData[col.key] = typeof value === "string" ? value.trim() : value
-
-        if (col.required && !rowData[col.key]) {
+        const value = row[col.key]
+        if (col.required && (value === undefined || value === null || value === "")) {
           newErrors.push({
             row: index + 1,
             column: col.label,
@@ -121,12 +120,47 @@ export function BulkImportDialog({
           })
         }
       })
+    })
+    setErrors(newErrors)
+  }
+
+  const validateAndPreview = (data: any[]) => {
+    const validatedData = data.map((row) => {
+      const rowData: any = {}
+      columns.forEach(col => {
+        // Find the value by matching the label (CSV header) or the key
+        const value = row[col.label] || row[col.key] || ""
+        rowData[col.key] = typeof value === "string" ? value.trim() : value
+      })
       return rowData
     })
 
     setParsedData(validatedData)
-    setErrors(newErrors)
+    validateData(validatedData)
     setStep("preview")
+  }
+
+  const handleCellEdit = (rowIndex: number, colKey: string, value: string) => {
+    const newData = [...parsedData]
+    newData[rowIndex] = { ...newData[rowIndex], [colKey]: value }
+    setParsedData(newData)
+    validateData(newData)
+  }
+
+  const handleRemoveRow = (rowIndex: number) => {
+    const newData = parsedData.filter((_, i) => i !== rowIndex)
+    setParsedData(newData)
+    validateData(newData)
+  }
+
+  const handleAddRow = () => {
+    const newRow: any = {}
+    columns.forEach(col => {
+      newRow[col.key] = ""
+    })
+    const newData = [...parsedData, newRow]
+    setParsedData(newData)
+    validateData(newData)
   }
 
   const handleConfirmUpload = async () => {
@@ -227,6 +261,9 @@ export function BulkImportDialog({
                     Validation Passed
                   </Badge>
                 )}
+                <Button variant="outline" size="sm" onClick={handleAddRow} className="gap-1 h-8">
+                  <Plus className="h-3 w-3" /> Add Row
+                </Button>
               </div>
 
               <div className="border rounded-md max-h-[400px] overflow-auto">
@@ -238,6 +275,7 @@ export function BulkImportDialog({
                           {col.label} {col.required && <span className="text-destructive">*</span>}
                         </TableHead>
                       ))}
+                      <TableHead className="w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -246,14 +284,32 @@ export function BulkImportDialog({
                         {columns.map(col => {
                           const error = errors.find(e => e.row === rowIndex + 1 && e.column === col.label)
                           return (
-                            <TableCell key={col.key} className={cn(error && "bg-destructive/10 text-destructive")}>
-                              <div className="flex flex-col">
-                                <span>{row[col.key] || "—"}</span>
-                                {error && <span className="text-[10px] font-medium">{error.message}</span>}
+                            <TableCell key={col.key} className={cn("p-1", error && "bg-destructive/5")}>
+                              <div className="flex flex-col gap-1">
+                                <Input
+                                  value={row[col.key] || ""}
+                                  onChange={(e) => handleCellEdit(rowIndex, col.key, e.target.value)}
+                                  className={cn(
+                                    "h-8 text-xs border-transparent hover:border-input focus:border-primary transition-colors",
+                                    error && "border-destructive focus:ring-destructive"
+                                  )}
+                                  placeholder={col.label}
+                                />
+                                {error && <span className="text-[10px] font-medium text-destructive px-1">{error.message}</span>}
                               </div>
                             </TableCell>
                           )
                         })}
+                        <TableCell className="p-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            onClick={() => handleRemoveRow(rowIndex)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Search, Plus, Mail, Phone, Building, Briefcase, Loader2, MoreVertical, X, FileUp } from "lucide-react"
 
@@ -23,21 +23,7 @@ import { PRINCIPAL_INVITE_STAFF_ROLES, formatSchoolRoleLabel } from "@/config/sc
 import { toast } from "sonner"
 import { BulkImportDialog, type CSVColumn } from "@/components/common/BulkImportDialog"
 
-function parseStaffBulk(text: string) {
-  const lines = text
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean)
-  const rows: { email: string; first_name: string; last_name: string; role: string }[] = []
-  for (const line of lines) {
-    const parts = line.split(",").map((p) => p.trim())
-    if (parts.length < 4) continue
-    const [email, first_name, last_name, role] = parts
-    if (!email || !role) continue
-    rows.push({ email, first_name, last_name, role })
-  }
-  return rows
-}
+
 
 export function StaffDirectory() {
   const activeSchoolId = useAuth((s) => s.activeSchoolId)

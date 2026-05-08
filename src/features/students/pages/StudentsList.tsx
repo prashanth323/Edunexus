@@ -139,21 +139,7 @@ function StudentRowActions({
   )
 }
 
-function parseStudentBulk(text: string) {
-  const lines = text
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean)
-  const rows: { email: string; first_name: string; last_name: string; admission_no?: string }[] = []
-  for (const line of lines) {
-    const parts = line.split(",").map((p) => p.trim())
-    if (parts.length < 3) continue
-    const [email, first_name, last_name, admission_no] = parts
-    if (!email) continue
-    rows.push({ email, first_name, last_name, admission_no: admission_no || undefined })
-  }
-  return rows
-}
+
 
 export function StudentsList() {
   const activeSchoolId = useAuth((state) => state.activeSchoolId)
