@@ -30,8 +30,10 @@ import { useAuth } from "@/features/auth/hooks/useAuth"
 import {
   getHostelRooms,
   getHostelPrincipalOverview,
+  getHostelAllocations,
   EMPTY_HOSTEL_OVERVIEW,
 } from "../api/hostel.api"
+import { HostelManageDialog } from "../components/HostelManageDialog"
 
 const PIE_COLORS = ["hsl(var(--primary))", "hsl(var(--muted-foreground) / 0.35)"]
 const BAR_FILL = "hsl(var(--primary) / 0.85)"
@@ -42,6 +44,12 @@ export function HostelOverview() {
   const { data: rooms, isLoading } = useQuery({
     queryKey: ["hostel-rooms", activeSchoolId],
     queryFn: () => getHostelRooms(activeSchoolId!),
+    enabled: !!activeSchoolId,
+  })
+
+  const { data: allocations = [] } = useQuery({
+    queryKey: ["hostel-allocations", activeSchoolId],
+    queryFn: () => getHostelAllocations(activeSchoolId!),
     enabled: !!activeSchoolId,
   })
 
@@ -117,6 +125,7 @@ export function HostelOverview() {
           <h1 className="text-3xl font-bold tracking-tight">Hostel</h1>
           <p className="text-muted-foreground mt-1">Rooms, capacity, and occupancy for the active school.</p>
         </div>
+        <HostelManageDialog />
         {isFetching ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground shrink-0">
             <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -266,6 +275,43 @@ export function HostelOverview() {
                     </TableCell>
                   </TableRow>
                 ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Room assignments</CardTitle>
+          <CardDescription>Students currently allocated to hostel rooms</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {allocations.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No active room assignments.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Student</TableHead>
+                  <TableHead>Admission no.</TableHead>
+                  <TableHead>Room</TableHead>
+                  <TableHead>Check-in</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {allocations.map((a) => {
+                  const prof = a.students?.profiles
+                  const room = a.hostel_rooms
+                  return (
+                    <TableRow key={a.id}>
+                      <TableCell>{prof?.full_name ?? "—"}</TableCell>
+                      <TableCell>{a.students?.admission_no ?? "—"}</TableCell>
+                      <TableCell>{room ? `${room.block ? `${room.block}-` : ""}${room.room_no}` : "—"}</TableCell>
+                      <TableCell>{a.check_in_date}</TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           )}

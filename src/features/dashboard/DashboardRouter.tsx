@@ -1,5 +1,7 @@
 import { useAuth } from "@/features/auth/hooks/useAuth"
 import { PrincipalDashboard } from "./components/PrincipalDashboard"
+import { VpDashboard } from "./components/VpDashboard"
+import { ReceptionDashboard } from "./components/ReceptionDashboard"
 import { TeacherDashboard } from "./components/TeacherDashboard"
 import { ParentDashboard } from "./components/ParentDashboard"
 import { PlatformDashboard } from "./components/PlatformDashboard"
@@ -33,11 +35,11 @@ export function DashboardRouter() {
       return <FinanceOverview embedded />
     case "principal":
     case "school_admin":
-    case "vice_principal":
       return <PrincipalDashboard />
-    case "crm_manager":
-      return <CrmManagerDashboard />
+    case "vice_principal":
+      return <VpDashboard />
     case "admission_manager":
+      return <CrmManagerDashboard />
     case "counselor":
       return <CounselorHomeDashboard />
     case "teacher":
@@ -46,7 +48,7 @@ export function DashboardRouter() {
     case "librarian":
       return <TeacherDashboard />
     case "hr_manager":
-      return <PrincipalDashboard />
+      return <PrincipalDashboard title="HR Dashboard" subtitle="Staff and school operations overview." />
     case "transport_manager":
       return <TransportManagerDashboard />
     case "parent":
@@ -54,7 +56,7 @@ export function DashboardRouter() {
     case "student":
       return <StudentDashboard />
     case "receptionist":
-      return <PrincipalDashboard />
+      return <ReceptionDashboard />
     default:
       return (
         <div className="flex flex-col items-center justify-center h-[400px] text-center gap-4">

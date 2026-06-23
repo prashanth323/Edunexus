@@ -96,3 +96,74 @@ export async function getHostelRooms(schoolId: string) {
   if (error) throw error
   return (data ?? []) as HostelRoomRow[]
 }
+
+export async function createHostelRoom(schoolId: string, input: Omit<HostelRoomRow, "id" | "school_id">) {
+  const { data, error } = await supabase
+    .from("hostel_rooms")
+    .insert({ school_id: schoolId, ...input })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export type HostelAllocationRow = {
+  id: string
+  student_id: string
+  room_id: string
+  check_in_date: string
+  is_active: boolean
+  students?: { admission_no: string; profiles: { full_name: string } | null } | null
+  hostel_rooms?: { room_no: string; block: string | null } | null
+}
+
+export async function getHostelAllocations(schoolId: string) {
+  const { data, error } = await supabase
+    .from("hostel_allocations")
+    .select(`
+      id, student_id, room_id, check_in_date, is_active,
+      students ( admission_no, profiles:profile_id ( full_name ) ),
+      hostel_rooms ( room_no, block )
+    `)
+    .eq("school_id", schoolId)
+    .eq("is_active", true)
+  if (error) throw error
+  return (data ?? []).map((row) => {
+    const st = row.students
+    const student = Array.isArray(st) ? st[0] : st
+    const prof = student?.profiles
+    const profile = Array.isArray(prof) ? prof[0] : prof
+    const room = row.hostel_rooms
+    const roomObj = Array.isArray(room) ? room[0] : room
+    return {
+      ...row,
+      students: student ? { admission_no: student.admission_no, profiles: profile ?? null } : null,
+      hostel_rooms: roomObj ?? null,
+    }
+  }) as HostelAllocationRow[]
+}
+
+export async function assignHostelRoom(params: {
+  schoolId: string
+  studentId: string
+  roomId: string
+  academicYearId: string
+}) {
+  const { error } = await supabase.from("hostel_allocations").insert({
+    school_id: params.schoolId,
+    student_id: params.studentId,
+    room_id: params.roomId,
+    academic_year_id: params.academicYearId,
+    check_in_date: new Date().toISOString().slice(0, 10),
+    is_active: true,
+  })
+  if (error) throw error
+}
+
+export async function changeHostelRoom(allocationId: string, newRoomId: string) {
+  const { error } = await supabase
+    .from("hostel_allocations")
+    .update({ room_id: newRoomId })
+    .eq("id", allocationId)
+  if (error) throw error
+}

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
-import { BookOpen, CalendarCheck, CalendarDays, CreditCard, GraduationCap, IdCard, Megaphone } from "lucide-react"
+import { BookOpen, CalendarCheck, CalendarDays, ClipboardList, CreditCard, GraduationCap, IdCard, Megaphone, TrendingUp } from "lucide-react"
 import { Link } from "react-router-dom"
 
 import { Card, CardContent, CardDescription, CardFooter, CardGrid, CardHeader, CardTitle } from "@/components/ui/card"
@@ -17,9 +17,13 @@ import { supabase } from "@/lib/supabase"
 type StudentEnrollmentInfo = {
   class_name: string | null
   section_name: string | null
+  section_id: string | null
+  student_id: string | null
   academic_year: string | null
   attendance_pct_this_month: number | null
   pending_fees: number | null
+  homework_due_today: number
+  upcoming_exams: number
 }
 
 async function getStudentDashboardData(
@@ -37,22 +41,29 @@ async function getStudentDashboardData(
     return {
       class_name: null,
       section_name: null,
+      section_id: null,
+      student_id: null,
       academic_year: null,
       attendance_pct_this_month: null,
       pending_fees: null,
+      homework_due_today: 0,
+      upcoming_exams: 0,
     }
   }
+
+  const studentId = student.id
 
   const { data: enrollment } = await supabase
     .from("enrollments")
     .select(`
+      section_id,
       sections (
         name,
         classes ( name )
       ),
       academic_years ( name, is_current )
     `)
-    .eq("student_id", student.id)
+    .eq("student_id", studentId)
     .eq("status", "active")
     .limit(1)
     .maybeSingle()
@@ -68,7 +79,7 @@ async function getStudentDashboardData(
   const { data: attendanceRows } = await supabase
     .from("attendance")
     .select("status")
-    .eq("student_id", student.id)
+    .eq("student_id", studentId)
     .gte("date", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10))
 
   let attendancePct: number | null = null
@@ -80,18 +91,37 @@ async function getStudentDashboardData(
   const { data: feeRows } = await supabase
     .from("student_invoices")
     .select("due_amount")
-    .eq("student_id", student.id)
+    .eq("student_id", studentId)
     .in("status", ["pending", "partial", "overdue"])
     .is("deleted_at", null)
 
   const pendingFees = feeRows?.reduce((sum, r) => sum + Number(r.due_amount ?? 0), 0) ?? 0
 
+  const today = new Date().toISOString().slice(0, 10)
+  const { count: hwCount } = await supabase
+    .from("homework_assignments")
+    .select("id", { count: "exact", head: true })
+    .eq("section_id", enrollment?.section_id ?? "")
+    .eq("due_date", today)
+    .is("deleted_at", null)
+
+  const { count: examCount } = await supabase
+    .from("exams")
+    .select("id", { count: "exact", head: true })
+    .eq("school_id", schoolId)
+    .gte("start_date", today)
+    .is("deleted_at", null)
+
   return {
     class_name: cl && typeof cl === "object" && "name" in cl ? String(cl.name) : null,
     section_name: sec && typeof sec === "object" && "name" in sec ? String(sec.name) : null,
+    section_id: enrollment?.section_id ?? null,
+    student_id: studentId,
     academic_year: ay && typeof ay === "object" && "name" in ay ? String(ay.name) : null,
     attendance_pct_this_month: attendancePct,
     pending_fees: pendingFees,
+    homework_due_today: hwCount ?? 0,
+    upcoming_exams: examCount ?? 0,
   }
 }
 
@@ -104,7 +134,7 @@ const quickLinks = [
   },
   {
     title: "Learning (LMS)",
-    desc: "Assignments, subjects, and materials.",
+    desc: "Class and section assignments, materials, and progress.",
     href: "/lms",
     icon: BookOpen,
   },
@@ -234,6 +264,40 @@ export function StudentDashboard() {
                   <p className="text-xs text-muted-foreground mt-1">
                     {Number(info.pending_fees ?? 0) > 0 ? "Outstanding balance" : "All clear"}
                   </p>
+                </CardContent>
+              </Card>
+              <Card variants={staggerI}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Homework today</CardTitle>
+                  <BookOpen className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{info.homework_due_today}</div>
+                  <p className="text-xs text-muted-foreground mt-1">Due today for your section</p>
+                </CardContent>
+              </Card>
+
+              <Card variants={staggerI}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Upcoming exams</CardTitle>
+                  <ClipboardList className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{info.upcoming_exams}</div>
+                  <p className="text-xs text-muted-foreground mt-1">Scheduled ahead</p>
+                </CardContent>
+              </Card>
+
+              <Card variants={staggerI}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Performance</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {info.attendance_pct_this_month != null ? `${info.attendance_pct_this_month}%` : "—"}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Attendance this month</p>
                 </CardContent>
               </Card>
             </CardGrid>

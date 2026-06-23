@@ -72,7 +72,7 @@ export function LmsCatalogView() {
 
       <Tabs defaultValue="assignments" className="space-y-6">
         <TabsList className="bg-muted/50 border">
-          <TabsTrigger value="subjects">Subjects</TabsTrigger>
+          <TabsTrigger value="subjects">Class &amp; section</TabsTrigger>
           <TabsTrigger value="assignments">Course assignments</TabsTrigger>
           <TabsTrigger value="materials">Materials</TabsTrigger>
         </TabsList>
@@ -103,7 +103,7 @@ export function LmsCatalogView() {
                     <CardHeader className="pb-3">
                       <div className="flex justify-between items-start mb-2">
                         <Badge variant="outline" className="text-xs font-normal">
-                          {assignment.subject?.name || "Subject"}
+                          {assignment.subject?.name || "Class work"}
                         </Badge>
                         <Badge variant={isOverdue ? "destructive" : "secondary"} className="text-xs">
                           {isOverdue ? "Overdue" : "Active"}
@@ -153,7 +153,7 @@ export function LmsCatalogView() {
                       <FileText className="h-5 w-5" />
                     </div>
                     <CardTitle className="text-base">{material.title}</CardTitle>
-                    <CardDescription className="text-xs">{material.subject?.name || "Subject"}</CardDescription>
+                    <CardDescription className="text-xs">{material.subject?.name || "Class material"}</CardDescription>
                   </CardHeader>
                   <CardFooter className="pt-2 flex justify-between items-center border-t mt-4 p-3 bg-muted/20">
                     <Badge variant="outline" className="text-[10px] uppercase">

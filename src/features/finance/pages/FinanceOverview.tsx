@@ -49,6 +49,7 @@ import {
   EMPTY_FINANCE_METRICS,
   type FinancePrincipalMetrics,
 } from "../api/finance.api"
+import { PaymentEntryDialog } from "../components/PaymentEntryDialog"
 
 type FinanceOverviewProps = {
   /** When true, omit full page chrome for use on role home dashboards. */
@@ -214,6 +215,7 @@ export function FinanceOverview({ embedded = false }: FinanceOverviewProps) {
   const activeSchoolId = useAuth((s) => s.activeSchoolId)
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
+  const [paymentOpen, setPaymentOpen] = useState(false)
 
   const { data: transactions = [], isLoading: txLoading, isFetching: txFetching } = useQuery({
     queryKey: ["recent-transactions", activeSchoolId],
@@ -328,6 +330,9 @@ export function FinanceOverview({ embedded = false }: FinanceOverviewProps) {
         ) : null}
       </div>
       <div className="flex flex-wrap gap-2 shrink-0">
+        <Button size="sm" className="gap-2" onClick={() => setPaymentOpen(true)}>
+          <CreditCard className="h-4 w-4" /> Record payment
+        </Button>
         <Button asChild variant="outline" size="sm" className="gap-2">
           <Link to="/finance/fee-structures">
             <DollarSign className="h-4 w-4" /> Fee Structures
@@ -624,6 +629,7 @@ export function FinanceOverview({ embedded = false }: FinanceOverviewProps) {
           </Card>
         </TabsContent>
       </Tabs>
+      <PaymentEntryDialog open={paymentOpen} onOpenChange={setPaymentOpen} />
     </div>
   )
 }

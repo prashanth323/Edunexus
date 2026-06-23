@@ -36,10 +36,18 @@ export async function getFeeStructures(schoolId: string) {
 }
 
 export async function createFeeStructure(schoolId: string, input: FeeStructureInput) {
+  const { data: ay } = await supabase
+    .from("academic_years")
+    .select("id")
+    .eq("school_id", schoolId)
+    .eq("is_current", true)
+    .maybeSingle()
+
   const { data, error } = await supabase
     .from("fee_structures")
     .insert({
       school_id: schoolId,
+      academic_year_id: ay?.id ?? null,
       name: input.name,
       amount: input.amount,
       frequency: input.frequency,
@@ -80,10 +88,20 @@ export async function generateBulkInvoices(
   // Get fee structure details
   const { data: fee, error: feeErr } = await supabase
     .from("fee_structures")
-    .select("amount, name")
+    .select("amount, name, academic_year_id")
     .eq("id", feeStructureId)
     .single()
   if (feeErr) throw feeErr
+
+  const { data: sectionEnrollment } = await supabase
+    .from("enrollments")
+    .select("academic_year_id")
+    .eq("section_id", sectionId)
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle()
+
+  const academicYearId = fee.academic_year_id ?? sectionEnrollment?.academic_year_id
 
   if (!enrollments || enrollments.length === 0) {
     throw new Error("No active students in this section")
@@ -102,6 +120,7 @@ export async function generateBulkInvoices(
     school_id: schoolId,
     student_id: e.student_id,
     fee_structure_id: feeStructureId,
+    academic_year_id: academicYearId,
     invoice_no: `${prefix}-${String(startNum + i).padStart(5, "0")}`,
     amount: fee.amount,
     discount: 0,

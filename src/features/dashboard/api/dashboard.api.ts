@@ -251,7 +251,30 @@ export async function getCrmManagerDashboard(schoolId: string) {
     .eq('school_id', schoolId)
     .single()
     
-  if (error && error.code !== 'PGRST116') throw error
+  if (error && error.code !== 'PGRST116') {
+    const { data: leads } = await supabase
+      .from('leads')
+      .select('status, priority, created_at, updated_at')
+      .eq('school_id', schoolId)
+      .is('deleted_at', null)
+    const rows = leads ?? []
+    const total = rows.length
+    const admitted = rows.filter((l) => l.status === 'admitted').length
+    return {
+      school_id: schoolId,
+      total_leads: total,
+      leads_new: rows.filter((l) => l.status === 'new').length,
+      leads_engaged: rows.filter((l) => ['contacted','interested','followup_scheduled'].includes(l.status)).length,
+      leads_visit: rows.filter((l) => ['visit_scheduled','visited'].includes(l.status)).length,
+      leads_applied: rows.filter((l) => l.status === 'applied').length,
+      leads_admitted: admitted,
+      leads_lost: rows.filter((l) => ['not_interested','lost'].includes(l.status)).length,
+      leads_this_month: rows.filter((l) => l.created_at >= new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()).length,
+      admissions_this_month: rows.filter((l) => l.status === 'admitted' && l.updated_at >= new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()).length,
+      conversion_rate: total > 0 ? String(Math.round(1000 * admitted / total) / 10) : '0',
+      high_priority_open: rows.filter((l) => l.priority === 'high' && !['admitted','not_interested','lost'].includes(l.status)).length,
+    }
+  }
   return data
 }
 

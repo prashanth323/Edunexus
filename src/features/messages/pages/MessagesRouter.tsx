@@ -1,31 +1,32 @@
 import { useAuth } from "@/features/auth/hooks/useAuth"
-import { ParentMessagesView } from "../components/ParentMessagesView"
-import { TeacherMessagesView } from "../components/TeacherMessagesView"
-import { AdminMessagesOverview } from "../components/AdminMessagesOverview"
+import { ParentPrincipalMessagesView } from "../components/ParentPrincipalMessagesView"
+import { TeacherPrincipalMessagesView } from "../components/TeacherPrincipalMessagesView"
+import { PrincipalMessagesView } from "../components/PrincipalMessagesView"
 
 export function MessagesRouter() {
   const activeRole = useAuth((s) => s.activeRole)
 
   if (activeRole === "parent") {
-    return <ParentMessagesView />
+    return <ParentPrincipalMessagesView />
   }
 
   if (activeRole === "teacher" || activeRole === "class_teacher") {
-    return <TeacherMessagesView />
+    return <TeacherPrincipalMessagesView />
   }
 
-  if (
-    activeRole &&
-    ["principal", "vice_principal", "school_admin", "operations_admin"].includes(activeRole)
-  ) {
-    return <AdminMessagesOverview />
+  if (activeRole === "principal") {
+    return <PrincipalMessagesView />
+  }
+
+  if (activeRole === "school_admin") {
+    return <PrincipalMessagesView />
   }
 
   return (
-    <div className="flex flex-col gap-4 animate-in fade-in duration-500">
+    <div className="flex flex-col gap-4">
       <h1 className="text-3xl font-bold tracking-tight">Messages</h1>
       <p className="text-muted-foreground">
-        Direct messaging is available for parents and teachers. Switch to a supported role to use this feature.
+        Messaging is available for parents, teachers, and the principal.
       </p>
     </div>
   )

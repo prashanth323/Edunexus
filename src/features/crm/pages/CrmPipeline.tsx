@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Phone, Mail, MoreHorizontal, Calendar, Plus } from "lucide-react"
 import { toast } from "sonner"
@@ -29,6 +30,8 @@ import {
   type LeadStatus,
   LEAD_STATUS_OPTIONS,
 } from "../api/crm.api"
+import { LeadCreateDialog } from "../components/LeadCreateDialog"
+import { CallLogPanel } from "../components/CallLogPanel"
 
 const PIPELINE_STAGES: {
   id: string
@@ -77,6 +80,7 @@ const PIPELINE_STAGES: {
 export function CrmPipeline() {
   const activeSchoolId = useAuth((state) => state.activeSchoolId)
   const queryClient = useQueryClient()
+  const [leadDialogOpen, setLeadDialogOpen] = useState(false)
 
   const { data: leads = [], isLoading } = useQuery({
     queryKey: ["crm-leads", activeSchoolId],
@@ -135,10 +139,15 @@ export function CrmPipeline() {
             Manage prospective students from inquiry to enrollment.
           </p>
         </div>
-        <Button className="shrink-0 gap-2" type="button" variant="secondary" disabled>
+        <Button className="shrink-0 gap-2" type="button" onClick={() => setLeadDialogOpen(true)}>
           <Plus className="h-4 w-4" /> New Lead
         </Button>
       </div>
+
+      {activeSchoolId && <CallLogPanel schoolId={activeSchoolId} />}
+      {activeSchoolId && (
+        <LeadCreateDialog open={leadDialogOpen} onOpenChange={setLeadDialogOpen} schoolId={activeSchoolId} />
+      )}
 
       <div className="flex flex-1 gap-4 overflow-x-auto pb-4 pt-2">
         {PIPELINE_STAGES.map((stage) => {

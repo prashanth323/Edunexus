@@ -36,6 +36,7 @@ import { Button } from "@/components/ui/button"
 import { CourseCardSkeletonGrid } from "@/components/ui/card-skeleton"
 import { useAuth } from "@/features/auth/hooks/useAuth"
 import { getLmsPrincipalOverview, EMPTY_LMS_OVERVIEW, listStaffCourses, type LmsPrincipalOverview as Overview } from "../api/lms.api"
+import { BookDistributionPanel } from "./BookDistributionPanel"
 
 const PIE_COLORS = ["hsl(var(--primary))", "hsl(var(--muted-foreground) / 0.35)"]
 const BAR_FILL = "hsl(var(--primary) / 0.85)"
@@ -336,7 +337,7 @@ export function LmsPrincipalOverview() {
                     </div>
                     <CardTitle className="text-lg leading-tight">{c.title}</CardTitle>
                     <CardDescription className="line-clamp-2">
-                      {(c as { subjects?: { name?: string } }).subjects?.name ?? "Subject"}
+                      {(c as { subjects?: { name?: string } }).subjects?.name ?? "Class & section"}
                     </CardDescription>
                   </CardHeader>
                   <CardFooter className="flex gap-2 border-t pt-4 mt-auto bg-muted/10">
@@ -356,6 +357,8 @@ export function LmsPrincipalOverview() {
           )}
         </DialogContent>
       </Dialog>
+
+      <BookDistributionPanel />
     </div>
   )
 }

@@ -14,6 +14,7 @@ import {
 import { TimetableGrid } from "../components/TimetableGrid"
 import { TimetableSlotEditor } from "../components/TimetableSlotEditor"
 import { ClassTeacherAssigner } from "../components/ClassTeacherAssigner"
+import { TimetableApprovalPanel } from "../components/TimetableApprovalPanel"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
@@ -76,6 +77,7 @@ export function PrincipalTimetablePage() {
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
+      <TimetableApprovalPanel />
       {/* Page header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>

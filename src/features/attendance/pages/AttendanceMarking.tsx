@@ -6,6 +6,7 @@ import { AttendancePrincipalOverview } from "./AttendancePrincipalOverview"
 import { AttendanceParentView } from "./AttendanceParentView"
 import { AttendanceStudentView } from "./AttendanceStudentView"
 import { StaffAttendanceMarking } from "./StaffAttendanceMarking"
+import { HalfDayRequestForm } from "../components/HalfDayRequestForm"
 
 /** Roles that see the principal overview + staff attendance tab. */
 const LEADERSHIP_ROLES = new Set([
@@ -40,6 +41,15 @@ export function AttendanceMarking() {
 
   if (activeRole === "student") {
     return <AttendanceStudentView />
+  }
+
+  if (activeRole === "receptionist") {
+    return (
+      <div className="flex flex-col gap-6">
+        <HalfDayRequestForm />
+        <AttendancePrincipalOverview />
+      </div>
+    )
   }
 
   const isLeadership = activeRole && LEADERSHIP_ROLES.has(activeRole)

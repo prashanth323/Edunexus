@@ -1,6 +1,5 @@
 /**
  * Single source for which roles see which routes (sidebar + RequireRole).
- * Includes school_role enum values and platform_role names from DB.
  */
 
 import type { LucideIcon } from "lucide-react"
@@ -22,13 +21,13 @@ import {
   FileText,
   IdCard,
   MessagesSquare,
+  ClipboardCheck,
 } from "lucide-react"
 
 export type NavLink = {
   title: string
   href: string
   icon: LucideIcon
-  /** Roles that can see this link (school + platform names as stored in DB). */
   roles: readonly string[]
 }
 
@@ -47,7 +46,6 @@ export function isPlatformRole(role: string | null | undefined): boolean {
   return (PLATFORM_ROLES as readonly string[]).includes(role)
 }
 
-/** Same access pattern as principal-level school staff (for platform ops). Super admin excluded — uses a narrow sidebar. */
 const PRINCIPAL_LIKE: readonly string[] = ["principal", "vice_principal", "operations_admin"]
 
 const ADMIN_STUDENTS: readonly string[] = [
@@ -61,7 +59,6 @@ const FINANCE_ROLES: readonly string[] = [
   "finance_admin",
 ]
 
-/** Roles that get a dashboard; also used for Settings (profile) so header link works for everyone. */
 const ALL_REGISTERED_USER_ROLES: readonly string[] = [
   "super_admin",
   ...PRINCIPAL_LIKE,
@@ -108,6 +105,17 @@ export const SIDEBAR_LINKS: NavLink[] = [
     roles: [...ADMIN_STUDENTS, "accountant", "receptionist"],
   },
   {
+    title: "Admissions",
+    href: "/admissions",
+    icon: ClipboardCheck,
+    roles: [
+      ...PRINCIPAL_LIKE,
+      "school_admin",
+      "admission_manager",
+      "receptionist",
+    ],
+  },
+  {
     title: "Staff",
     href: "/staff",
     icon: UserSquare2,
@@ -124,6 +132,7 @@ export const SIDEBAR_LINKS: NavLink[] = [
       "class_teacher",
       "student",
       "parent",
+      "receptionist",
     ],
   },
   {
@@ -171,8 +180,8 @@ export const SIDEBAR_LINKS: NavLink[] = [
   {
     title: "CRM",
     href: "/crm",
-    icon: Users,
     roles: [...PRINCIPAL_LIKE, "admission_manager", "counselor"],
+    icon: Users,
   },
   {
     title: "Transport",
@@ -191,7 +200,7 @@ export const SIDEBAR_LINKS: NavLink[] = [
     href: "/messages",
     icon: MessagesSquare,
     roles: [
-      ...PRINCIPAL_LIKE,
+      "principal",
       "school_admin",
       "teacher",
       "class_teacher",
@@ -210,6 +219,7 @@ export const SIDEBAR_LINKS: NavLink[] = [
       "student",
       "parent",
       "counselor",
+      "receptionist",
     ],
   },
   {
@@ -226,16 +236,12 @@ export function navLinksForRole(activeRole: string | null): NavLink[] {
 }
 
 const SUPER_ADMIN_ONLY_PATH_PREFIXES = ["/insights", "/announcements"] as const
-
-/** Stable reference — avoid allocating a new array on every `getRolesAllowedForPath` call (breaks React effect deps). */
 const ROLES_SUPER_ADMIN_ONLY = ["super_admin"] as const satisfies readonly string[]
 
-/** Roles allowed to open a path (from SIDEBAR_LINKS super-admin prefixes). Dashboard '/' uses DashboardRouter gate. */
 export function getRolesAllowedForPath(pathname: string): readonly string[] | null {
   const normalized =
     pathname === "" || pathname === undefined ? "/" : pathname.startsWith("/") ? pathname : `/${pathname}`
 
-  // Narrow override for entering marks subroute
   if (/\/exams\/[^/]+\/marks/.test(normalized)) {
     return ["principal", "vice_principal", "operations_admin", "school_admin", "teacher", "class_teacher"]
   }

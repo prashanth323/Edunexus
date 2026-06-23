@@ -16,6 +16,7 @@ import { PendingDuesReport } from "@/features/finance/pages/PendingDuesReport"
 import { AttendanceMarking } from "@/features/attendance/pages/AttendanceMarking"
 import { FinanceRouter } from "@/features/finance/pages/FinanceRouter"
 import { CrmPipeline } from "@/features/crm/pages/CrmPipeline"
+import { AdmissionsWorkspace } from "@/features/admissions/pages/AdmissionsWorkspace"
 import { LmsLayout } from "@/features/lms/layout/LmsLayout"
 import { LmsCourseCreatePage } from "@/features/lms/pages/LmsCourseCreatePage"
 import { LmsCourseEditPage } from "@/features/lms/pages/LmsCourseEditPage"
@@ -137,6 +138,14 @@ export const router = createBrowserRouter([
             element: (
               <RequireRole>
                 <PendingDuesReport />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "admissions",
+            element: (
+              <RequireRole>
+                <AdmissionsWorkspace />
               </RequireRole>
             ),
           },

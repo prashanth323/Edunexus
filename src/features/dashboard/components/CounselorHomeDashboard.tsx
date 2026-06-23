@@ -7,11 +7,12 @@ import { StatCardSkeletonGrid } from "@/components/ui/card-skeleton"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/features/auth/hooks/useAuth"
 import { getLeads, type LeadStatus } from "@/features/crm/api/crm.api"
+import { getFollowups } from "@/features/crm/api/crm.api"
+import { CallLogPanel } from "@/features/crm/components/CallLogPanel"
 
 const OPEN: LeadStatus[] = ["new", "contacted", "interested", "followup_scheduled"]
 const VISIT: LeadStatus[] = ["visit_scheduled", "visited"]
 const PIPELINE: LeadStatus[] = ["applied"]
-const WON: LeadStatus[] = ["admitted"]
 
 export function CounselorHomeDashboard() {
   const activeSchoolId = useAuth((s) => s.activeSchoolId)
@@ -21,6 +22,16 @@ export function CounselorHomeDashboard() {
     queryFn: () => getLeads(activeSchoolId!),
     enabled: !!activeSchoolId,
   })
+
+  const { data: followups = [] } = useQuery({
+    queryKey: ["counselor-followups", activeSchoolId],
+    queryFn: () => getFollowups(activeSchoolId!),
+    enabled: !!activeSchoolId,
+  })
+
+  const pendingCallbacks = followups.filter(
+    (f) => f.type === "call" && f.next_followup && new Date(f.next_followup) >= new Date(),
+  ).length
 
   if (isLoading) {
     return (
@@ -87,15 +98,17 @@ export function CounselorHomeDashboard() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Admitted</CardTitle>
+            <CardTitle className="text-sm font-medium">Call queue</CardTitle>
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{count(WON)}</div>
-            <p className="text-xs text-muted-foreground mt-1">Won this period</p>
+            <div className="text-2xl font-bold">{pendingCallbacks}</div>
+            <p className="text-xs text-muted-foreground mt-1">Scheduled callbacks</p>
           </CardContent>
         </Card>
       </div>
+
+      {activeSchoolId && <CallLogPanel schoolId={activeSchoolId} />}
     </div>
   )
 }

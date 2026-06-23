@@ -239,8 +239,46 @@ export function StudentProfile() {
         </div>
       </div>
 
-      {/* Summary cards */}
+      {/* Summary cards — admission, fees, documents first */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Admission no.</CardTitle>
+            <Hash className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl font-bold">{student.admission_no}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pending Fees</CardTitle>
+            <CreditCard className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-xl font-bold ${totalPending > 0 ? "text-destructive" : "text-green-600"}`}>
+              ${totalPending.toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {student.invoices.length} invoice(s)
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Documents</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl font-bold">
+              {Array.isArray(student.documents) ? student.documents.length : 0}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Uploaded files</p>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Class</CardTitle>
@@ -289,21 +327,6 @@ export function StudentProfile() {
             <div className="text-xl font-bold">{student.parents.length}</div>
             <p className="text-xs text-muted-foreground mt-1">
               {student.parents.length === 0 ? "No parents linked" : student.parents.map((p) => p.relation).join(", ")}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Fees</CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-xl font-bold ${totalPending > 0 ? "text-destructive" : "text-green-600"}`}>
-              ${totalPending.toLocaleString()}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {student.invoices.length} invoice(s)
             </p>
           </CardContent>
         </Card>

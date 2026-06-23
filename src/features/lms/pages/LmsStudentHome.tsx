@@ -172,7 +172,7 @@ export function LmsStudentHome() {
                       <CardDescription className="line-clamp-3">{c.description ?? "No description"}</CardDescription>
                     </CardHeader>
                     <CardContent className="text-xs text-muted-foreground">
-                      {(c as { subjects?: { name?: string } }).subjects?.name ?? ""}
+                      Class &amp; section learning path
                       {enrolled ? (
                         <span className="block mt-2 font-medium text-foreground capitalize">Status: {st}</span>
                       ) : null}

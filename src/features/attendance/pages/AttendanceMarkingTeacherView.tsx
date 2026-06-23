@@ -35,7 +35,7 @@ const EMPTY_EXISTING: { student_id: string; status: string }[] = []
 
 export function AttendanceMarkingTeacherView() {
   const queryClient = useQueryClient()
-  const { user, activeSchoolId } = useAuth()
+  const { user, activeSchoolId, activeRole } = useAuth()
   const [date, setDate] = useState<string>(new Date().toISOString().split("T")[0])
   const [sectionId, setSectionId] = useState<string | null>(null)
   const [attendanceMap, setAttendanceMap] = useState<Record<string, DailyAttendanceStatus>>({})
@@ -48,8 +48,25 @@ export function AttendanceMarkingTeacherView() {
   })
 
   const { data: sectionsData, isLoading: sectionsLoading } = useQuery({
-    queryKey: ["sections-year", activeSchoolId, academicYearId],
-    queryFn: () => getSectionsForYear(activeSchoolId!, academicYearId!),
+    queryKey: ["sections-year", activeSchoolId, academicYearId, activeRole, user?.id],
+    queryFn: async () => {
+      const all = await getSectionsForYear(activeSchoolId!, academicYearId!)
+      if (activeRole !== "class_teacher" || !user?.id) return all
+      const { supabase } = await import("@/lib/supabase")
+      const { data: staff } = await supabase
+        .from("staff")
+        .select("id")
+        .eq("profile_id", user.id)
+        .eq("school_id", activeSchoolId!)
+        .maybeSingle()
+      if (!staff?.id) return all
+      const { data: assigned } = await supabase
+        .from("sections")
+        .select("id")
+        .eq("class_teacher_id", staff.id)
+      const ids = new Set((assigned ?? []).map((s) => s.id))
+      return all.filter((s) => ids.has(s.id))
+    },
     enabled: !!activeSchoolId && !!academicYearId,
   })
   const sections = sectionsData ?? EMPTY_SECTIONS

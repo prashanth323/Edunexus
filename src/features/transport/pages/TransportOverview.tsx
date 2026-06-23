@@ -33,6 +33,7 @@ import {
   getTransportPrincipalOverview,
   EMPTY_TRANSPORT_OVERVIEW,
 } from "../api/transport.api"
+import { TransportManageDialog } from "../components/TransportManageDialog"
 
 const PIE_COLORS = ["hsl(var(--primary))", "hsl(var(--muted-foreground) / 0.35)"]
 const BAR_FILL = "hsl(var(--primary) / 0.85)"
@@ -122,6 +123,7 @@ export function TransportOverview() {
           <h1 className="text-3xl font-bold tracking-tight">Transport</h1>
           <p className="text-muted-foreground mt-1">Fleet, routes, and assignments for the active school.</p>
         </div>
+        <TransportManageDialog />
         {isFetching ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground shrink-0">
             <Loader2 className="h-4 w-4 animate-spin text-primary" />

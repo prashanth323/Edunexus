@@ -122,7 +122,15 @@ function ChartSkeleton({ height = 280 }: { height?: number }) {
   return <Skeleton className={`w-full rounded-lg`} style={{ height }} />
 }
 
-export function PrincipalDashboard() {
+type PrincipalDashboardProps = {
+  title?: string
+  subtitle?: string
+}
+
+export function PrincipalDashboard({
+  title = "Principal Dashboard",
+  subtitle = "Live metrics across attendance, finance, admissions, and enrollment.",
+}: PrincipalDashboardProps = {}) {
   const activeSchoolId = useAuth((state) => state.activeSchoolId)
   const [attendanceDays, setAttendanceDays] = useState(14)
 
@@ -216,8 +224,8 @@ export function PrincipalDashboard() {
     return (
       <div className="flex flex-col gap-6 animate-in fade-in duration-500">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Principal Dashboard</h1>
-          <p className="text-muted-foreground mt-1">School performance at a glance.</p>
+          <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
+          <p className="text-muted-foreground mt-1">{subtitle}</p>
         </div>
         <StatCardSkeletonGrid count={6} columnsClassName="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6" />
         <div className="grid gap-4 lg:grid-cols-2">
@@ -237,10 +245,8 @@ export function PrincipalDashboard() {
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Principal Dashboard</h1>
-          <p className="text-muted-foreground mt-1">
-            Live metrics across attendance, finance, admissions, and enrollment.
-          </p>
+          <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
+          <p className="text-muted-foreground mt-1">{subtitle}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" asChild>
