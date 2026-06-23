@@ -2,7 +2,6 @@ import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
   DollarSign,
-  Download,
   CreditCard,
   Search,
   Loader2,
@@ -328,9 +327,18 @@ export function FinanceOverview({ embedded = false }: FinanceOverviewProps) {
           </div>
         ) : null}
       </div>
-      <Button className="shrink-0 gap-2" type="button" variant="secondary">
-        <Download className="h-4 w-4" /> Export Report
-      </Button>
+      <div className="flex flex-wrap gap-2 shrink-0">
+        <Button asChild variant="outline" size="sm" className="gap-2">
+          <Link to="/finance/fee-structures">
+            <DollarSign className="h-4 w-4" /> Fee Structures
+          </Link>
+        </Button>
+        <Button asChild variant="outline" size="sm" className="gap-2">
+          <Link to="/finance/pending-dues">
+            <AlertTriangle className="h-4 w-4" /> Pending Dues
+          </Link>
+        </Button>
+      </div>
     </div>
   )
 

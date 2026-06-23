@@ -22,6 +22,8 @@ export type SchoolInviteRow = {
   parents?: ParentInvitePayload[]
   /** Optional class section — student is enrolled for the current academic year. */
   section_id?: string
+  /** Optional fee structure IDs — auto-generates invoices for the student. */
+  fee_structure_ids?: string[]
 }
 
 export type InviteSchoolUsersResult = {

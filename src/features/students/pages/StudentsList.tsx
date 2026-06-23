@@ -11,6 +11,7 @@ import {
   getFilteredRowModel,
 } from "@tanstack/react-table"
 import { Plus, Search, MoreHorizontal, ArrowUpDown, Loader2, X, GraduationCap, FileUp } from "lucide-react"
+import { useNavigate } from "react-router-dom"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -42,12 +43,13 @@ import { useAuth } from "@/features/auth/hooks/useAuth"
 import { inviteSchoolUsers, type SchoolInviteRow, type ParentInvitePayload } from "@/features/invites/api/invites.api"
 import { toast } from "sonner"
 import { BulkImportDialog, type CSVColumn } from "@/components/common/BulkImportDialog"
+import { supabase } from "@/lib/supabase"
 
 /** Stable when the query has no `data` yet — a fresh `[]` each render makes `useReactTable` think data changed every time (infinite re-renders). */
 const EMPTY_STUDENTS: Student[] = []
 
-/** Matches RLS: `principal` and `school_admin` may write classes / sections / enrollments. */
-const CAN_MANAGE_ACADEMICS = new Set(["principal", "school_admin"])
+/** Matches RLS: `principal`, `school_admin`, `vice_principal`, and `accountant` may manage students. */
+const CAN_MANAGE_ACADEMICS = new Set(["principal", "school_admin", "vice_principal", "accountant"])
 
 function baseStudentColumns(): ColumnDef<Student>[] {
   return [
@@ -114,6 +116,7 @@ function StudentRowActions({
   student: Student
   assignProps: { enabled: boolean; schoolId: string | undefined }
 }) {
+  const navigate = useNavigate()
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -128,8 +131,12 @@ function StudentRowActions({
           Copy Student ID
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem disabled>View Profile</DropdownMenuItem>
-        <DropdownMenuItem disabled>Edit Details</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => navigate(`/students/${student.id}`)}>
+          View Profile
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => navigate(`/students/${student.id}`)}>
+          Edit Details
+        </DropdownMenuItem>
         <DropdownMenuItem className="text-destructive" disabled>
           Archive Student
         </DropdownMenuItem>
@@ -158,6 +165,7 @@ export function StudentsList() {
   const [admissionNo, setAdmissionNo] = useState("")
   const [autoAdmission, setAutoAdmission] = useState(true)
   const [bulkImportOpen, setBulkImportOpen] = useState(false)
+  const [selectedFeeStructures, setSelectedFeeStructures] = useState<string[]>([])
 
   const [g1Email, setG1Email] = useState("")
   const [g1First, setG1First] = useState("")
@@ -217,6 +225,23 @@ export function StudentsList() {
     staleTime: 15_000,
   })
 
+  // Fee structures for current academic year
+  const { data: feeStructures = [], isFetching: feeStructuresLoading } = useQuery({
+    queryKey: ["fee-structures-for-invite", activeSchoolId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("fee_structures")
+        .select("id, name, amount, frequency")
+        .eq("school_id", activeSchoolId!)
+        .eq("is_active", true)
+        .order("name")
+      if (error) throw error
+      return data as { id: string; name: string; amount: number; frequency: string }[]
+    },
+    enabled: !!activeSchoolId && inviteOpen,
+    staleTime: 30_000,
+  })
+
   const table = useReactTable({
     data: students,
     columns,
@@ -242,30 +267,36 @@ export function StudentsList() {
     try {
       const res = await inviteSchoolUsers({ schoolId: activeSchoolId, invitations })
       const failed = res.results.filter((r) => !r.ok)
-      failed.forEach((f) => toast.error(`${f.email}: ${f.error ?? "Failed"}`))
+      
+      if (failed.length > 0) {
+        if (failed.length > 3) {
+          toast.error(`${failed.length} invitations failed. Check the console for details.`)
+          console.error("Bulk invite failures:", failed)
+        } else {
+          failed.forEach((f) => toast.error(`${f.email}: ${f.error ?? "Failed"}`))
+        }
+      }
+
       const okCount = res.results.filter((r) => r.ok).length
       if (okCount) toast.success(`Sent ${okCount} invitation(s).`)
+      
       if (okCount) {
         await queryClient.invalidateQueries({ queryKey: ["students", activeSchoolId] })
-        setInviteOpen(false)
+        // Only close if no errors, or if some succeeded we might want to stay open to show which failed
+        if (failed.length === 0) {
+          setInviteOpen(false)
+        }
+        
+        // Clear single invite fields
         setSingleEmail("")
         setSingleFirst("")
         setSingleLast("")
         setAdmissionNo("")
         setAutoAdmission(true)
-        setG1Email("")
-        setG1First("")
-        setG1Last("")
-        setG1Phone("")
-        setG1Relation("father")
-        setG1Primary(true)
-        setG2Email("")
-        setG2First("")
-        setG2Last("")
-        setG2Phone("")
-        setG2Relation("mother")
-        setG2Primary(false)
-        setInviteSectionId("")
+        // Reset guardian fields
+        setG1Email(""); setG1First(""); setG1Last(""); setG1Phone(""); setG1Relation("father"); setG1Primary(true);
+        setG2Email(""); setG2First(""); setG2Last(""); setG2Phone(""); setG2Relation("mother"); setG2Primary(false);
+        setSelectedFeeStructures([]);
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Invite failed")
@@ -346,6 +377,7 @@ export function StudentsList() {
         auto_admission_no: autoAdmission,
         parents: parents.length ? parents : undefined,
         ...(inviteSectionId ? { section_id: inviteSectionId } : {}),
+        ...(selectedFeeStructures.length ? { fee_structure_ids: selectedFeeStructures } : {}),
       },
     ])
   }
@@ -364,22 +396,25 @@ export function StudentsList() {
 
   async function handleBulkImport(data: any[]) {
     await submitStudentInvites(
-      data.map((r) => ({
-        email: r.email,
-        first_name: r.first_name,
-        last_name: r.last_name,
-        role: "student" as const,
-        admission_no: r.admission_no,
-        auto_admission_no: !r.admission_no?.trim(),
-      })),
+      data.map((r) => {
+        const adm = r.admission_no?.toString().trim()
+        return {
+          email: r.email,
+          first_name: r.first_name,
+          last_name: r.last_name,
+          role: "student" as const,
+          admission_no: adm || undefined,
+          auto_admission_no: !adm,
+          section_id: inviteSectionId || undefined,
+        }
+      }),
     )
   }
-
   const inviteModal =
     inviteOpen &&
     createPortal(
       <div
-        className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm"
+        className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm"
         role="presentation"
         onMouseDown={(e) => {
           if (e.target === e.currentTarget) setInviteOpen(false)
@@ -462,6 +497,46 @@ export function StudentsList() {
                   </p>
                 </div>
               ) : null}
+
+              {/* Fee structure selection */}
+              <div className="space-y-2">
+                <Label>Assign fee structures (optional)</Label>
+                {feeStructuresLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading fee structures…</p>
+                ) : feeStructures.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    No fee structures configured. Create them in ERP → Fee Structures.
+                  </p>
+                ) : (
+                  <div className="rounded-lg border p-3 space-y-2 bg-muted/30 max-h-48 overflow-y-auto">
+                    {feeStructures.map((fs) => (
+                      <label
+                        key={fs.id}
+                        className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 rounded px-1 py-0.5"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedFeeStructures.includes(fs.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedFeeStructures((prev) => [...prev, fs.id])
+                            } else {
+                              setSelectedFeeStructures((prev) => prev.filter((id) => id !== fs.id))
+                            }
+                          }}
+                        />
+                        <span className="flex-1">{fs.name}</span>
+                        <span className="text-muted-foreground text-xs">
+                          ₹{fs.amount.toLocaleString("en-IN")} / {fs.frequency.replace(/_/g, " ")}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Selected fee structures will auto-generate invoices for this student.
+                </p>
+              </div>
 
               <div className="border-t pt-4 space-y-4">
                 <p className="text-sm font-medium">Guardians (optional)</p>
@@ -586,35 +661,26 @@ export function StudentsList() {
               </Button>
             </form>
 
-              <div className="pt-4 border-t">
-                <p className="text-sm font-medium mb-2">Bulk import students</p>
-                <p className="text-xs text-muted-foreground mb-4">
-                  Upload a CSV file to invite multiple students at once. 
-                </p>
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  className="w-full gap-2" 
-                  onClick={() => setBulkImportOpen(true)}
-                >
-                  <FileUp className="h-4 w-4" />
-                  Upload CSV File
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-          <BulkImportDialog
-            open={bulkImportOpen}
-            onOpenChange={setBulkImportOpen}
-            title="Import Students"
-            description="Bulk invite students by uploading a CSV file. We'll send them invitations automatically."
-            columns={STUDENT_CSV_COLUMNS}
-            templateRows={STUDENT_TEMPLATE_ROWS}
-            onUpload={handleBulkImport}
-          />
-        </div>,
-        document.body,
-      )
+            <div className="pt-4 border-t">
+              <p className="text-sm font-medium mb-2">Bulk import students</p>
+              <p className="text-xs text-muted-foreground mb-4">
+                Upload a CSV file to invite multiple students at once. 
+              </p>
+              <Button 
+                type="button" 
+                variant="outline" 
+                className="w-full gap-2" 
+                onClick={() => setBulkImportOpen(true)}
+              >
+                <FileUp className="h-4 w-4" />
+                Upload CSV File
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>,
+      document.body,
+    )
 
   const manageClassesModal =
     manageClassesOpen &&
@@ -622,7 +688,7 @@ export function StudentsList() {
     activeSchoolId &&
     createPortal(
       <div
-        className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm"
+        className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm"
         role="presentation"
         onMouseDown={(e) => {
           if (e.target === e.currentTarget) setManageClassesOpen(false)
@@ -635,7 +701,7 @@ export function StudentsList() {
                 <GraduationCap className="h-5 w-5" /> Manage classes &amp; sections
               </h2>
               <p className="text-sm text-muted-foreground">
-                Principals define grade levels (classes), then sections (A/B/…) within the active academic year.
+                Principals define grade levels (classes), then sections (A/B/…) within the academic year.
               </p>
             </div>
             <Button variant="ghost" size="icon" type="button" onClick={() => setManageClassesOpen(false)}>
@@ -658,6 +724,16 @@ export function StudentsList() {
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
       {inviteModal}
       {manageClassesModal}
+
+      <BulkImportDialog
+        open={bulkImportOpen}
+        onOpenChange={setBulkImportOpen}
+        title="Import Students"
+        description="Bulk invite students by uploading a CSV file. We'll send them invitations automatically."
+        columns={STUDENT_CSV_COLUMNS}
+        templateRows={STUDENT_TEMPLATE_ROWS}
+        onUpload={handleBulkImport}
+      />
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>

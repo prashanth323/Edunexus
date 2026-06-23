@@ -14,6 +14,7 @@ export const SCHOOL_ROLE_VALUES = [
   "class_teacher",
   "librarian",
   "transport_manager",
+  "receptionist",
   "student",
   "parent",
 ] as const
@@ -31,6 +32,7 @@ export const PRINCIPAL_INVITABLE_ROLES: readonly SchoolRoleValue[] = [
   "class_teacher",
   "librarian",
   "transport_manager",
+  "receptionist",
   "student",
   "parent",
 ]

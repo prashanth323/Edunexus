@@ -43,7 +43,9 @@ export function LmsCatalogView() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Learning Management</h1>
-            <p className="text-muted-foreground mt-1">Manage subjects, assignments, and course materials.</p>
+            <p className="text-muted-foreground mt-1">
+              Manage LMS catalog subjects, learning-path assignments inside courses, and materials.
+            </p>
           </div>
         </div>
         <div className="flex gap-2 h-10 bg-muted/50 rounded-md border w-full max-w-md animate-pulse" />
@@ -61,20 +63,26 @@ export function LmsCatalogView() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Learning Management</h1>
-          <p className="text-muted-foreground mt-1">Manage subjects, assignments, and course materials.</p>
+          <p className="text-muted-foreground mt-1">
+            Manage LMS catalog subjects, learning-path assignments inside courses, and materials. Daily homework is posted
+            from the Homework area (section roster), not here.
+          </p>
         </div>
       </div>
 
       <Tabs defaultValue="assignments" className="space-y-6">
         <TabsList className="bg-muted/50 border">
           <TabsTrigger value="subjects">Subjects</TabsTrigger>
-          <TabsTrigger value="assignments">Assignments</TabsTrigger>
+          <TabsTrigger value="assignments">Course assignments</TabsTrigger>
           <TabsTrigger value="materials">Materials</TabsTrigger>
         </TabsList>
 
         <TabsContent value="assignments" className="space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold">Active Assignments</h2>
+            <div>
+              <h2 className="text-xl font-semibold">Learning-path assignments</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">Tasks tied to LMS courses — not daily class homework.</p>
+            </div>
             <Button className="gap-2">
               <Plus className="h-4 w-4" /> Create Assignment
             </Button>

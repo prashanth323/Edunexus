@@ -1766,17 +1766,17 @@ CREATE POLICY "submissions_update_grade" ON public.assignment_submissions FOR UP
 CREATE POLICY "exams_select" ON public.exams FOR SELECT
   USING (is_platform_admin() OR school_id = get_my_school_id());
 CREATE POLICY "exams_write" ON public.exams FOR ALL
-  USING (is_super_admin() OR (school_id = get_my_school_id() AND (has_school_role('principal') OR has_school_role('school_admin') OR has_school_role('teacher'))));
+  USING (is_super_admin() OR (school_id = get_my_school_id() AND (has_school_role('principal') OR has_school_role('school_admin') OR has_school_role('teacher') OR has_school_role('class_teacher'))));
 
 CREATE POLICY "exam_results_select" ON public.exam_results FOR SELECT
   USING (
     is_platform_admin()
-    OR (school_id = get_my_school_id() AND (has_school_role('principal') OR has_school_role('school_admin') OR has_school_role('teacher')))
+    OR (school_id = get_my_school_id() AND (has_school_role('principal') OR has_school_role('school_admin') OR has_school_role('teacher') OR has_school_role('class_teacher')))
     OR student_id IN (SELECT id FROM public.students WHERE profile_id = auth.uid())
     OR student_id IN (SELECT sp.student_id FROM public.student_parents sp JOIN public.parents p ON sp.parent_id = p.id WHERE p.profile_id = auth.uid())
   );
 CREATE POLICY "exam_results_write" ON public.exam_results FOR ALL
-  USING (is_super_admin() OR (school_id = get_my_school_id() AND (has_school_role('teacher') OR has_school_role('school_admin') OR has_school_role('principal'))));
+  USING (is_super_admin() OR (school_id = get_my_school_id() AND (has_school_role('teacher') OR has_school_role('class_teacher') OR has_school_role('school_admin') OR has_school_role('principal'))));
 
 -- ===== CRM (STRICTLY SCHOOL-SCOPED) =====
 -- Lead Sources

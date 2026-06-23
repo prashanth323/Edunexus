@@ -8,7 +8,7 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 }
 
-const INVITER_ROLES = new Set(["principal", "school_admin", "vice_principal", "hr_manager"])
+const INVITER_ROLES = new Set(["principal", "school_admin", "vice_principal", "hr_manager", "accountant"])
 
 const INVITABLE_ROLES = new Set([
   "school_admin",
@@ -20,6 +20,7 @@ const INVITABLE_ROLES = new Set([
   "class_teacher",
   "librarian",
   "transport_manager",
+  "receptionist",
   "student",
   "parent",
 ])
@@ -46,6 +47,8 @@ type InviteRow = {
   parents?: ParentInviteRow[]
   /** When role is student, optional section placement for current academic year. */
   section_id?: string
+  /** When role is student, optional fee structure IDs to auto-generate invoices. */
+  fee_structure_ids?: string[]
 }
 
 interface Body {
@@ -575,6 +578,49 @@ Deno.serve(async (req) => {
         if (stuErr) {
           results.push({ email, ok: false, error: stuErr.message })
           continue
+        }
+      }
+
+      // Auto-generate invoices for selected fee structures
+      if (inv.fee_structure_ids && inv.fee_structure_ids.length > 0) {
+        const { data: stuForFee } = await admin
+          .from("students")
+          .select("id")
+          .eq("school_id", schoolId)
+          .eq("profile_id", userId)
+          .maybeSingle()
+
+        if (stuForFee?.id) {
+          const ayId = await getCurrentAcademicYearIdForSchool(admin, schoolId)
+          if (ayId) {
+            for (const fsId of inv.fee_structure_ids) {
+              const { data: fs } = await admin
+                .from("fee_structures")
+                .select("id, amount, name")
+                .eq("id", fsId)
+                .eq("school_id", schoolId)
+                .maybeSingle()
+
+              if (fs) {
+                // Generate invoice number
+                const invNo = `INV-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`
+                const dueDate = new Date()
+                dueDate.setDate(dueDate.getDate() + 30) // 30-day due
+
+                await admin.from("student_invoices").insert({
+                  school_id: schoolId,
+                  student_id: stuForFee.id,
+                  academic_year_id: ayId,
+                  fee_structure_id: fs.id,
+                  invoice_no: invNo,
+                  description: fs.name,
+                  amount: fs.amount,
+                  due_date: dueDate.toISOString().slice(0, 10),
+                  status: "pending",
+                })
+              }
+            }
+          }
         }
       }
     }

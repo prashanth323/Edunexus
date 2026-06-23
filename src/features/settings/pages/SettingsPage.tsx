@@ -30,12 +30,14 @@ import {
   type ProfileSettingsFormValues,
 } from "@/features/auth/lib/profileEssentials"
 import { SchoolSettingsSection } from "@/features/settings/components/SchoolSettingsSection"
+import { ProfileAvatarUpload } from "@/features/settings/components/ProfileAvatarUpload"
 import { canEditSchoolSettings } from "@/features/settings/api/school-settings.api"
 import { fetchMyStaffProfessionalDetails, updateMyStaffProfessionalDetails, type Qualification } from "@/features/settings/api/teacher-subject.api"
 import { LmsTeacherProfileFields } from "@/features/settings/components/LmsTeacherProfileFields"
 import { defaultLmsTeacherProfile, type LmsTeacherProfile } from "@/features/settings/lib/lmsTeacherProfile"
 import { getSubjects } from "@/features/lms/api/lms.api"
 import { supabase } from "@/lib/supabase"
+import { invalidateAfterSignedInProfileDetailsSaved } from "@/lib/invalidateProfilePortraits"
 
 const TEACHING_SUBJECT_ROLES = new Set(["teacher", "class_teacher", "librarian"])
 
@@ -205,6 +207,7 @@ export function SettingsPage() {
 
       if (error) throw error
       await useAuth.getState().initialize({ refreshProfile: true })
+      invalidateAfterSignedInProfileDetailsSaved(qc, { schoolId: activeSchoolId })
       toast.success("Profile saved.")
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Could not save profile"
@@ -253,7 +256,13 @@ export function SettingsPage() {
     return undefined
   }, [profile?.user_roles, activeSchoolId, schoolsBrief])
 
-  const showSchoolEditor = canEditSchoolSettings(activeRole) && !!activeSchoolId
+  const showStudentParentAvatar =
+    !!activeSchoolId && !!user?.id && (activeRole === "student" || activeRole === "parent")
+
+  const showSchoolEditor = canEditSchoolSettings(activeRole)
+
+  const portalDisplayName =
+    `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim() || user?.email || "Profile"
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500 max-w-3xl">
@@ -275,6 +284,27 @@ export function SettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {showStudentParentAvatar ? (
+            <div className="flex flex-col sm:flex-row gap-6 pb-6 border-b">
+              <ProfileAvatarUpload
+                schoolId={activeSchoolId!}
+                profileId={user!.id}
+                currentAvatarUrl={profile?.avatar_url}
+                displayName={portalDisplayName}
+                onUploaded={() => {
+                  void useAuth.getState().initialize({ refreshProfile: true })
+                }}
+              />
+              <div className="text-sm text-muted-foreground pt-1 space-y-1 max-w-md">
+                <p className="font-medium text-foreground">Portal profile photo</p>
+                <p>
+                  Shown in the app header. This is separate from school ID card portraits (update those under{" "}
+                  <span className="font-medium text-foreground">Student ID Card</span>).
+                </p>
+              </div>
+            </div>
+          ) : null}
+
           <div className="flex items-start gap-2 text-sm">
             <Mail className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
             <div>

@@ -6,6 +6,13 @@ import { LoginPage } from "@/features/auth/pages/LoginPage"
 import { CompleteProfilePage } from "@/features/auth/pages/CompleteProfilePage"
 import { DashboardRouter } from "@/features/dashboard/DashboardRouter"
 import { StudentsList } from "@/features/students/pages/StudentsList"
+import { StudentProfile } from "@/features/students/pages/StudentProfile"
+import { StudentIdCardPage } from "@/features/students/pages/StudentIdCardPage"
+import { ExamManagement } from "@/features/exams/pages/ExamManagement"
+import { MarksEntry } from "@/features/exams/pages/MarksEntry"
+import { ExamResults } from "@/features/exams/pages/ExamResults"
+import { FeeStructureManager } from "@/features/finance/pages/FeeStructureManager"
+import { PendingDuesReport } from "@/features/finance/pages/PendingDuesReport"
 import { AttendanceMarking } from "@/features/attendance/pages/AttendanceMarking"
 import { FinanceRouter } from "@/features/finance/pages/FinanceRouter"
 import { CrmPipeline } from "@/features/crm/pages/CrmPipeline"
@@ -14,6 +21,7 @@ import { LmsCourseCreatePage } from "@/features/lms/pages/LmsCourseCreatePage"
 import { LmsCourseEditPage } from "@/features/lms/pages/LmsCourseEditPage"
 import { LmsCoursePlayerPage } from "@/features/lms/pages/LmsCoursePlayerPage"
 import { LmsDashboard } from "@/features/lms/pages/LmsDashboard"
+import { HomeworkDashboard } from "@/features/homework/pages/HomeworkDashboard"
 import { StaffDirectory } from "@/features/staff/pages/StaffDirectory"
 import { NoticesBoard } from "@/features/notices/pages/NoticesBoard"
 import { TransportOverview } from "@/features/transport/pages/TransportOverview"
@@ -23,6 +31,7 @@ import { PlatformInsightsList } from "@/features/dashboard/pages/PlatformInsight
 import { SchoolInsightsDetail } from "@/features/dashboard/pages/SchoolInsightsDetail"
 import { AnnouncementsPage } from "@/features/dashboard/pages/AnnouncementsPage"
 import { TimetableRouter } from "@/features/timetable/pages/TimetableRouter"
+import { MessagesRouter } from "@/features/messages/pages/MessagesRouter"
 import { RootError } from "@/components/common/RootError"
 
 export const router = createBrowserRouter([
@@ -60,6 +69,38 @@ export const router = createBrowserRouter([
             ),
           },
           {
+            path: "students/:studentId",
+            element: (
+              <RequireRole>
+                <StudentProfile />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "exams",
+            element: (
+              <RequireRole>
+                <ExamManagement />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "exams/:examId/marks",
+            element: (
+              <RequireRole>
+                <MarksEntry />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "exams/:examId/results",
+            element: (
+              <RequireRole>
+                <ExamResults />
+              </RequireRole>
+            ),
+          },
+          {
             path: "attendance",
             element: (
               <RequireRole>
@@ -80,6 +121,22 @@ export const router = createBrowserRouter([
             element: (
               <RequireRole>
                 <FinanceRouter />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "finance/fee-structures",
+            element: (
+              <RequireRole>
+                <FeeStructureManager />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "finance/pending-dues",
+            element: (
+              <RequireRole>
+                <PendingDuesReport />
               </RequireRole>
             ),
           },
@@ -118,10 +175,34 @@ export const router = createBrowserRouter([
             ],
           },
           {
+            path: "homework",
+            element: (
+              <RequireRole>
+                <HomeworkDashboard />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "student-id-card",
+            element: (
+              <RequireRole>
+                <StudentIdCardPage />
+              </RequireRole>
+            ),
+          },
+          {
             path: "staff",
             element: (
               <RequireRole>
                 <StaffDirectory />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "messages",
+            element: (
+              <RequireRole>
+                <MessagesRouter />
               </RequireRole>
             ),
           },

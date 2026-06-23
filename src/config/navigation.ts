@@ -18,6 +18,10 @@ import {
   Settings,
   GraduationCap,
   LineChart,
+  ClipboardList,
+  FileText,
+  IdCard,
+  MessagesSquare,
 } from "lucide-react"
 
 export type NavLink = {
@@ -72,6 +76,7 @@ const ALL_REGISTERED_USER_ROLES: readonly string[] = [
   "hr_manager",
   "librarian",
   "transport_manager",
+  "receptionist",
   "finance_admin",
   "support_admin",
   "analyst",
@@ -100,13 +105,13 @@ export const SIDEBAR_LINKS: NavLink[] = [
     title: "Students",
     href: "/students",
     icon: GraduationCap,
-    roles: [...ADMIN_STUDENTS],
+    roles: [...ADMIN_STUDENTS, "accountant", "receptionist"],
   },
   {
     title: "Staff",
     href: "/staff",
     icon: UserSquare2,
-    roles: [...PRINCIPAL_LIKE, "hr_manager"],
+    roles: [...PRINCIPAL_LIKE, "hr_manager", "receptionist"],
   },
   {
     title: "Attendance",
@@ -146,6 +151,24 @@ export const SIDEBAR_LINKS: NavLink[] = [
     roles: [...PRINCIPAL_LIKE, "school_admin", "teacher", "class_teacher", "student", "librarian"],
   },
   {
+    title: "Homework",
+    href: "/homework",
+    icon: FileText,
+    roles: [...PRINCIPAL_LIKE, "school_admin", "teacher", "class_teacher", "student", "parent"],
+  },
+  {
+    title: "Student ID Card",
+    href: "/student-id-card",
+    icon: IdCard,
+    roles: ["student", "parent"],
+  },
+  {
+    title: "Exams",
+    href: "/exams",
+    icon: ClipboardList,
+    roles: [...PRINCIPAL_LIKE, "school_admin", "teacher", "class_teacher", "student", "parent"],
+  },
+  {
     title: "CRM",
     href: "/crm",
     icon: Users,
@@ -155,13 +178,25 @@ export const SIDEBAR_LINKS: NavLink[] = [
     title: "Transport",
     href: "/transport",
     icon: Bus,
-    roles: [...PRINCIPAL_LIKE, "transport_manager"],
+    roles: [...PRINCIPAL_LIKE, "transport_manager", "receptionist"],
   },
   {
     title: "Hostel",
     href: "/hostel",
     icon: Home,
     roles: [...PRINCIPAL_LIKE],
+  },
+  {
+    title: "Messages",
+    href: "/messages",
+    icon: MessagesSquare,
+    roles: [
+      ...PRINCIPAL_LIKE,
+      "school_admin",
+      "teacher",
+      "class_teacher",
+      "parent",
+    ],
   },
   {
     title: "Notices",
@@ -199,6 +234,11 @@ const ROLES_SUPER_ADMIN_ONLY = ["super_admin"] as const satisfies readonly strin
 export function getRolesAllowedForPath(pathname: string): readonly string[] | null {
   const normalized =
     pathname === "" || pathname === undefined ? "/" : pathname.startsWith("/") ? pathname : `/${pathname}`
+
+  // Narrow override for entering marks subroute
+  if (/\/exams\/[^/]+\/marks/.test(normalized)) {
+    return ["principal", "vice_principal", "operations_admin", "school_admin", "teacher", "class_teacher"]
+  }
 
   for (const prefix of SUPER_ADMIN_ONLY_PATH_PREFIXES) {
     if (normalized === prefix || normalized.startsWith(`${prefix}/`)) {

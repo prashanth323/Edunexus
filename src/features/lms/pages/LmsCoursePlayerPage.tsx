@@ -708,6 +708,12 @@ function ManualSubmission({
         {submission?.marks_obtained !== null && (
           <p className="text-xs font-bold text-green-600">Grade: {submission?.marks_obtained} / {assignment.max_marks}</p>
         )}
+        {submission?.feedback && (
+          <div className="text-xs text-muted-foreground bg-background/50 p-2.5 rounded-lg border border-muted mt-2 shadow-sm">
+            <span className="font-bold text-foreground block mb-0.5">Teacher Remarks:</span>
+            {submission.feedback}
+          </div>
+        )}
       </div>
     )
   }

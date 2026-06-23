@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react"
-import { useQuery } from "@tanstack/react-query"
-import { CalendarCheck, GraduationCap } from "lucide-react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { CalendarCheck, GraduationCap, Edit2, Save, Loader2 } from "lucide-react"
+import { toast } from "sonner"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { TableSkeletonRows } from "@/components/ui/card-skeleton"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import {
   Table,
   TableBody,
@@ -45,12 +47,38 @@ async function getParentLinkedChildren(profileId: string): Promise<ParentChild[]
 
 export function AttendanceParentView() {
   const user = useAuth((s) => s.user)
+  const qc = useQueryClient()
 
   const today = new Date()
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
   const [fromDate, setFromDate] = useState(monthStart.toISOString().split("T")[0])
   const [toDate, setToDate] = useState(today.toISOString().split("T")[0])
   const [selectedChild, setSelectedChild] = useState<string | null>(null)
+
+  // Local editing states for remarks reason
+  const [editingRowId, setEditingRowId] = useState<string | null>(null)
+  const [reasonText, setReasonText] = useState("")
+  const [updatingId, setUpdatingId] = useState<string | null>(null)
+
+  async function handleSaveRemarks(attendanceId: string) {
+    if (updatingId) return
+    setUpdatingId(attendanceId)
+    try {
+      const { error } = await supabase.rpc("parent_update_attendance_remarks", {
+        p_attendance_id: attendanceId,
+        p_remarks: reasonText.trim() || null,
+      })
+
+      if (error) throw error
+      toast.success("Attendance remarks updated successfully")
+      qc.invalidateQueries({ queryKey: ["child-attendance", selectedChild, fromDate, toDate] })
+      setEditingRowId(null)
+    } catch (e: any) {
+      toast.error(e.message || "Failed to save remarks")
+    } finally {
+      setUpdatingId(null)
+    }
+  }
 
   const { data: children = [], isLoading: childrenLoading } = useQuery({
     queryKey: ["parent-children-attendance", user?.id],
@@ -249,6 +277,7 @@ export function AttendanceParentView() {
                       <TableHead>Date</TableHead>
                       <TableHead>Day</TableHead>
                       <TableHead className="text-center">Status</TableHead>
+                      <TableHead>Parent Reason / Remarks</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -261,6 +290,9 @@ export function AttendanceParentView() {
                         day: "numeric",
                       })
 
+                      const isAbsentOrLate = row.status !== "present"
+                      const isEditing = editingRowId === row.id
+
                       return (
                         <TableRow key={row.date}>
                           <TableCell className="font-medium">{dateStr}</TableCell>
@@ -272,6 +304,64 @@ export function AttendanceParentView() {
                             >
                               {row.status.replace(/_/g, " ")}
                             </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {isAbsentOrLate ? (
+                              isEditing ? (
+                                <div className="flex items-center gap-2 max-w-sm">
+                                  <Input
+                                    value={reasonText}
+                                    onChange={(e) => setReasonText(e.target.value)}
+                                    placeholder="Enter reason (e.g. sick leave, travel)..."
+                                    className="h-8 text-xs rounded-xl"
+                                    disabled={updatingId === row.id}
+                                    autoFocus
+                                  />
+                                  <Button
+                                    size="sm"
+                                    className="h-8 px-2.5 rounded-xl gap-1 shrink-0"
+                                    disabled={updatingId === row.id}
+                                    onClick={() => handleSaveRemarks(row.id)}
+                                  >
+                                    {updatingId === row.id ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <Save className="h-3 w-3" />
+                                    )}
+                                    Save
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 px-2.5 rounded-xl shrink-0 text-muted-foreground"
+                                    disabled={updatingId === row.id}
+                                    onClick={() => setEditingRowId(null)}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-between gap-4 py-1">
+                                  <span className={`text-xs ${row.remarks ? "text-foreground font-medium" : "text-muted-foreground italic"}`}>
+                                    {row.remarks || "No reason provided yet."}
+                                  </span>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 px-2 rounded-lg text-[10px] gap-1 border-primary/20 hover:border-primary/40 hover:bg-primary/5 text-primary shrink-0"
+                                    onClick={() => {
+                                      setEditingRowId(row.id)
+                                      setReasonText(row.remarks || "")
+                                    }}
+                                  >
+                                    <Edit2 className="h-2.5 w-2.5" />
+                                    {row.remarks ? "Edit Reason" : "Provide Reason"}
+                                  </Button>
+                                </div>
+                              )
+                            ) : (
+                              <span className="text-xs text-muted-foreground italic">—</span>
+                            )}
                           </TableCell>
                         </TableRow>
                       )

@@ -6,6 +6,7 @@ import {
   CalendarDays,
   ChevronRight,
   ClipboardCheck,
+  ClipboardList,
   Megaphone,
   PlusCircle,
   Users,
@@ -30,6 +31,12 @@ const TEACHER_QUICK_LINKS = [
     icon: ClipboardCheck,
   },
   {
+    to: "/exams",
+    title: "Create test / Enter marks",
+    description: "Create exams, enter student marks, and view results.",
+    icon: ClipboardList,
+  },
+  {
     to: "/timetable",
     title: "My timetable",
     description: "View your full weekly teaching schedule.",
@@ -37,8 +44,8 @@ const TEACHER_QUICK_LINKS = [
   },
   {
     to: "/lms",
-    title: "LMS workspace",
-    description: "Courses, lesson materials, assignments, and quiz activity.",
+    title: "LMS / Homework",
+    description: "Upload homework, course materials, assignments, and quizzes.",
     icon: BookOpen,
   },
   {
@@ -49,8 +56,8 @@ const TEACHER_QUICK_LINKS = [
   },
   {
     to: "/notices",
-    title: "Notices",
-    description: "Post or review school announcements for students and parents.",
+    title: "Send notice",
+    description: "Post announcements to students, parents, or entire school.",
     icon: Megaphone,
   },
 ] as const

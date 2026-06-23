@@ -1,6 +1,7 @@
 import type { ComponentType } from "react"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { cn } from "@/lib/utils"
 
 export type DashboardStatCardProps = {
   title: string
@@ -10,6 +11,7 @@ export type DashboardStatCardProps = {
   displayValue?: string
   description?: string
   icon: ComponentType<{ className?: string }>
+  onClick?: () => void
 }
 
 export function DashboardStatCard({
@@ -18,13 +20,17 @@ export function DashboardStatCard({
   displayValue,
   description,
   icon: Icon,
+  onClick,
 }: DashboardStatCardProps) {
   const main =
     displayValue ??
     (value !== undefined ? value.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—")
 
   return (
-    <Card>
+    <Card 
+      className={cn(onClick && "cursor-pointer hover:border-primary/50 transition-colors")}
+      onClick={onClick}
+    >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
         <Icon className="h-4 w-4 text-muted-foreground" />

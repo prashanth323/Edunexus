@@ -71,14 +71,24 @@ export function StaffDirectory() {
     try {
       const res = await inviteSchoolUsers({ schoolId: activeSchoolId, invitations })
       const failed = res.results.filter((r) => !r.ok)
-      if (failed.length) {
-        failed.forEach((f) => toast.error(`${f.email}: ${f.error ?? "Failed"}`))
+      
+      if (failed.length > 0) {
+        if (failed.length > 3) {
+          toast.error(`${failed.length} invitations failed. Check the console.`)
+          console.error("Staff invite failures:", failed)
+        } else {
+          failed.forEach((f) => toast.error(`${f.email}: ${f.error ?? "Failed"}`))
+        }
       }
+
       const okCount = res.results.filter((r) => r.ok).length
       if (okCount) toast.success(`Sent ${okCount} invitation(s).`)
+      
       if (okCount) {
         await queryClient.invalidateQueries({ queryKey: ["staff-directory", activeSchoolId] })
-        setInviteOpen(false)
+        if (failed.length === 0) {
+          setInviteOpen(false)
+        }
         setSingleEmail("")
         setSingleFirst("")
         setSingleLast("")
@@ -146,7 +156,7 @@ export function StaffDirectory() {
       {detailMember && <StaffMemberDetailModal member={detailMember} onClose={() => setDetailMember(null)} />}
 
       {inviteOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
           <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-lg border">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <div>

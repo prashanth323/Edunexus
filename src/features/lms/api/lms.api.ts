@@ -197,31 +197,38 @@ export async function getStudentIdForProfile(profileId: string, schoolId: string
   return data?.id ?? null
 }
 
+/** LMS course card joins for catalog / principal views (subject + class/section labels). */
+export type CourseWithLabels = CourseRow & {
+  subjects?: { id: string; name: string } | null
+  classes?: { id: string; name: string } | null
+  sections?: { id: string; name: string } | null
+}
+
 /** Published courses visible in catalog (RLS applies). */
-export async function listPublishedCourses(schoolId: string): Promise<(CourseRow & { subjects?: { name: string } })[]> {
+export async function listPublishedCourses(schoolId: string): Promise<CourseWithLabels[]> {
   const { data, error } = await supabase
     .from("courses")
-    .select(`*, subjects ( name )`)
+    .select(`*, subjects ( id, name ), classes ( id, name ), sections ( id, name )`)
     .eq("school_id", schoolId)
     .eq("is_published", true)
     .is("deleted_at", null)
     .order("title")
 
   if (error) throw error
-  return (data ?? []) as (CourseRow & { subjects?: { name: string } })[]
+  return (data ?? []) as CourseWithLabels[]
 }
 
 /** Teacher/staff course list including drafts (RLS applies). */
-export async function listStaffCourses(schoolId: string): Promise<(CourseRow & { subjects?: { name: string } })[]> {
+export async function listStaffCourses(schoolId: string): Promise<CourseWithLabels[]> {
   const { data, error } = await supabase
     .from("courses")
-    .select(`*, subjects ( name )`)
+    .select(`*, subjects ( id, name ), classes ( id, name ), sections ( id, name )`)
     .eq("school_id", schoolId)
     .is("deleted_at", null)
     .order("updated_at", { ascending: false })
 
   if (error) throw error
-  return (data ?? []) as (CourseRow & { subjects?: { name: string } })[]
+  return (data ?? []) as CourseWithLabels[]
 }
 
 export async function getCourseRow(courseId: string): Promise<CourseRow | null> {
@@ -738,6 +745,7 @@ export type LmsPrincipalOverview = {
   coursesPublished: number
   coursesDraft: number
   lessonsTotal: number
+  /** LMS course learning-path assignments (not daily homework). */
   assignmentsTotal: number
   assignmentsPublished: number
   studyMaterialsTotal: number
@@ -748,6 +756,10 @@ export type LmsPrincipalOverview = {
   examsTotal: number
   lmsCatalogEnrollmentsActive?: number
   lessonProgressRows?: number
+  homeworkTotal?: number
+  homeworkPublished?: number
+  homeworkSubmissionsRows?: number
+  homeworkSubmissionsFiled?: number
 }
 
 /** Default overview when there is no data or a metric cannot be loaded. */
@@ -766,6 +778,10 @@ export const EMPTY_LMS_OVERVIEW: LmsPrincipalOverview = {
   examsTotal: 0,
   lmsCatalogEnrollmentsActive: 0,
   lessonProgressRows: 0,
+  homeworkTotal: 0,
+  homeworkPublished: 0,
+  homeworkSubmissionsRows: 0,
+  homeworkSubmissionsFiled: 0,
 }
 
 async function safeHeadCount(
@@ -801,6 +817,10 @@ function mapRpcToOverview(raw: unknown): LmsPrincipalOverview | null {
     examsTotal: n("exams_total"),
     lmsCatalogEnrollmentsActive: n("lms_catalog_enrollments_active"),
     lessonProgressRows: n("lesson_progress_rows"),
+    homeworkTotal: n("homework_total"),
+    homeworkPublished: n("homework_published"),
+    homeworkSubmissionsRows: n("homework_submissions_rows"),
+    homeworkSubmissionsFiled: n("homework_submissions_filed"),
   }
 }
 
@@ -821,6 +841,10 @@ async function getLmsPrincipalOverviewParallel(schoolId: string): Promise<LmsPri
     examsTotal,
     lmsCatalogEnrollmentsActive,
     lessonProgressRows,
+    homeworkTotal,
+    homeworkPublished,
+    homeworkSubmissionsRows,
+    homeworkSubmissionsFiled,
   ] = await Promise.all([
     safeHeadCount(
       supabase.from("courses").select("*", { count: "exact", head: true }).eq("school_id", schoolId).is("deleted_at", null),
@@ -875,6 +899,27 @@ async function getLmsPrincipalOverviewParallel(schoolId: string): Promise<LmsPri
         .in("status", ["active", "completed"]),
     ),
     safeHeadCount(supabase.from("lesson_progress").select("*", { count: "exact", head: true }).eq("school_id", schoolId)),
+    safeHeadCount(
+      supabase.from("homework_assignments").select("*", { count: "exact", head: true }).eq("school_id", schoolId).is("deleted_at", null),
+    ),
+    safeHeadCount(
+      supabase
+        .from("homework_assignments")
+        .select("*", { count: "exact", head: true })
+        .eq("school_id", schoolId)
+        .is("deleted_at", null)
+        .eq("is_published", true),
+    ),
+    safeHeadCount(
+      supabase.from("homework_submissions").select("*", { count: "exact", head: true }).eq("school_id", schoolId),
+    ),
+    safeHeadCount(
+      supabase
+        .from("homework_submissions")
+        .select("*", { count: "exact", head: true })
+        .eq("school_id", schoolId)
+        .in("status", [...filedStatuses]),
+    ),
   ])
 
   const draft = Math.max(0, coursesTotal - coursesPublished)
@@ -894,6 +939,10 @@ async function getLmsPrincipalOverviewParallel(schoolId: string): Promise<LmsPri
     examsTotal,
     lmsCatalogEnrollmentsActive,
     lessonProgressRows,
+    homeworkTotal,
+    homeworkPublished,
+    homeworkSubmissionsRows,
+    homeworkSubmissionsFiled,
   }
 }
 
@@ -942,6 +991,116 @@ export async function submitAssignmentManual(params: {
       },
       { onConflict: "assignment_id,student_id" },
     )
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export type AssignmentSubmissionRow = {
+  id: string
+  school_id: string
+  assignment_id: string
+  student_id: string
+  submitted_at: string | null
+  content: string | null
+  attachments: unknown
+  status: string
+  marks_obtained: number | null
+  feedback: string | null
+  graded_by: string | null
+  graded_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type ClassSubmissionItem = {
+  student_id: string
+  student_name: string
+  roll_no: string | null
+  admission_no: string | null
+  submission: AssignmentSubmissionRow | null
+}
+
+export async function listSubmissionsForAssignment(
+  assignmentId: string,
+  courseId: string
+): Promise<ClassSubmissionItem[]> {
+  try {
+    // 1. Fetch all enrolled students for the course
+    const { data: enrollments, error: ee } = await supabase
+      .from("lms_course_enrollments")
+      .select(`
+        student_id,
+        student:students (
+          id,
+          first_name,
+          last_name,
+          roll_no,
+          admission_no
+        )
+      `)
+      .eq("course_id", courseId)
+      .in("status", ["active", "completed"])
+
+    if (ee) {
+      console.error("Error in listSubmissionsForAssignment (enrollments):", ee)
+      throw ee
+    }
+
+    // 2. Fetch all submissions for this assignment
+    const { data: submissions, error: se } = await supabase
+      .from("assignment_submissions")
+      .select("*")
+      .eq("assignment_id", assignmentId)
+
+    if (se) {
+      console.error("Error in listSubmissionsForAssignment (submissions):", se)
+      throw se
+    }
+
+    // Map them together safely
+    return (enrollments ?? []).map((e: any) => {
+      const rawStudent = e.student ?? e.students
+      const s = Array.isArray(rawStudent) ? rawStudent[0] : rawStudent
+      const sub = (submissions ?? []).find((subRow: any) => subRow.student_id === e.student_id)
+      
+      const firstName = s?.first_name || ""
+      const lastName = s?.last_name || ""
+      const fullName = `${firstName} ${lastName}`.trim()
+
+      return {
+        student_id: e.student_id,
+        student_name: fullName || "Unknown Student",
+        roll_no: s?.roll_no ?? null,
+        admission_no: s?.admission_no ?? null,
+        submission: sub ? (sub as AssignmentSubmissionRow) : null,
+      }
+    })
+  } catch (err) {
+    console.error("Failed listSubmissionsForAssignment:", err)
+    throw err
+  }
+}
+
+export async function gradeSubmission(params: {
+  submissionId: string
+  marksObtained: number
+  feedback?: string
+  gradedBy: string
+}) {
+  const { data, error } = await supabase
+    .from("assignment_submissions")
+    .update({
+      marks_obtained: params.marksObtained,
+      feedback: params.feedback || null,
+      status: "graded",
+      graded_by: params.gradedBy,
+      graded_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", params.submissionId)
     .select()
     .single()
 

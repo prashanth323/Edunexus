@@ -22,6 +22,7 @@ import { listSchoolsBrief, signOut, type SchoolBrief } from "@/features/auth/api
 import { needsProfileOnboarding } from "@/features/auth/lib/onboarding"
 import { navLinksForRole } from "@/config/navigation"
 import { cn } from "@/lib/utils"
+import { useStudentDocumentsDisplayUrl } from "@/features/students/hooks/useStudentDocumentsDisplayUrl"
 
 type SchoolOption = { id: string; name: string }
 
@@ -95,6 +96,8 @@ export function AppShell() {
   const showSchoolSwitcher = !!activeRole && activeRole !== "super_admin" && schoolOptions.length > 1
 
   const mobileNavLinks = navLinksForRole(activeRole)
+
+  const headerAvatarUrl = useStudentDocumentsDisplayUrl(profile?.avatar_url)
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
@@ -173,7 +176,7 @@ export function AppShell() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-9 w-9 rounded-full shrink-0">
                   <Avatar className="h-9 w-9">
-                    <AvatarImage src={profile?.avatar_url || ""} alt="Avatar" />
+                    <AvatarImage src={headerAvatarUrl ?? ""} alt="Avatar" />
                     <AvatarFallback className="bg-primary/10 text-primary">{initials}</AvatarFallback>
                   </Avatar>
                 </Button>

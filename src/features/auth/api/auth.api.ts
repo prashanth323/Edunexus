@@ -41,6 +41,25 @@ export async function signOut() {
   if (error) throw error
 }
 
+/** Profile picture for the portal header (`profiles.avatar_url`). Path: `{schoolId}/profiles/{profileId}/avatar.{ext}` */
+export async function uploadMyProfileAvatar(schoolId: string, profileId: string, file: File) {
+  const ext = file.name.split(".").pop() ?? "jpg"
+  const path = `${schoolId}/profiles/${profileId}/avatar.${ext}`
+
+  const { error: uploadError } = await supabase.storage
+    .from("student-documents")
+    .upload(path, file, { upsert: true, contentType: file.type })
+  if (uploadError) throw uploadError
+
+  const { data: urlData } = supabase.storage.from("student-documents").getPublicUrl(path)
+  const avatarUrl = urlData.publicUrl
+
+  const { error } = await supabase.from("profiles").update({ avatar_url: avatarUrl }).eq("id", profileId)
+  if (error) throw error
+
+  return avatarUrl
+}
+
 export async function getSession() {
   const { data, error } = await supabase.auth.getSession()
   if (error) throw error

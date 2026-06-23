@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
-import { BookOpen, CalendarCheck, CalendarDays, CreditCard, GraduationCap, Megaphone } from "lucide-react"
+import { BookOpen, CalendarCheck, CalendarDays, CreditCard, GraduationCap, IdCard, Megaphone } from "lucide-react"
 import { Link } from "react-router-dom"
 
 import { Card, CardContent, CardDescription, CardFooter, CardGrid, CardHeader, CardTitle } from "@/components/ui/card"
@@ -119,6 +119,12 @@ const quickLinks = [
     desc: "View your daily attendance history.",
     href: "/attendance",
     icon: CalendarCheck,
+  },
+  {
+    title: "Student ID Card",
+    desc: "View and print your school identity card.",
+    href: "/student-id-card",
+    icon: IdCard,
   },
 ] as const
 

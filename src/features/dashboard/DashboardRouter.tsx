@@ -6,6 +6,7 @@ import { PlatformDashboard } from "./components/PlatformDashboard"
 import { StudentDashboard } from "./components/StudentDashboard"
 import { CounselorHomeDashboard } from "./components/CounselorHomeDashboard"
 import { TransportManagerDashboard } from "./components/TransportManagerDashboard"
+import { CrmManagerDashboard } from "./components/CrmManagerDashboard"
 import { FinanceOverview } from "@/features/finance/pages/FinanceOverview"
 import { StatCardSkeletonGrid } from "@/components/ui/card-skeleton"
 
@@ -34,6 +35,8 @@ export function DashboardRouter() {
     case "school_admin":
     case "vice_principal":
       return <PrincipalDashboard />
+    case "crm_manager":
+      return <CrmManagerDashboard />
     case "admission_manager":
     case "counselor":
       return <CounselorHomeDashboard />
@@ -50,6 +53,8 @@ export function DashboardRouter() {
       return <ParentDashboard />
     case "student":
       return <StudentDashboard />
+    case "receptionist":
+      return <PrincipalDashboard />
     default:
       return (
         <div className="flex flex-col items-center justify-center h-[400px] text-center gap-4">
