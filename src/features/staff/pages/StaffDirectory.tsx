@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Search, Plus, Mail, Phone, Building, Briefcase, Loader2, MoreVertical, X, FileUp } from "lucide-react"
 
@@ -27,6 +28,8 @@ import { BulkImportDialog, type CSVColumn } from "@/components/common/BulkImport
 
 export function StaffDirectory() {
   const activeSchoolId = useAuth((s) => s.activeSchoolId)
+  const activeRole = useAuth((s) => s.activeRole)
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState("")
   const [inviteOpen, setInviteOpen] = useState(false)
@@ -37,6 +40,11 @@ export function StaffDirectory() {
   const [singleRole, setSingleRole] = useState<string>(PRINCIPAL_INVITE_STAFF_ROLES[0] ?? "teacher")
   const [bulkImportOpen, setBulkImportOpen] = useState(false)
   const [detailMember, setDetailMember] = useState<StaffMember | null>(null)
+
+  const canEditStaff =
+    activeRole === "vice_principal" ||
+    activeRole === "principal" ||
+    activeRole === "hr_manager"
 
   const { data: staff = [], isLoading } = useQuery({
     queryKey: ["staff-directory", activeSchoolId],
@@ -297,7 +305,12 @@ export function StaffDirectory() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                     <DropdownMenuItem onSelect={() => setDetailMember(member)}>View full profile</DropdownMenuItem>
-                    <DropdownMenuItem disabled>Edit details</DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={!canEditStaff}
+                      onSelect={() => navigate(`/staff/${member.id}/edit`)}
+                    >
+                      Edit details
+                    </DropdownMenuItem>
                     <DropdownMenuItem disabled>Deactivate</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

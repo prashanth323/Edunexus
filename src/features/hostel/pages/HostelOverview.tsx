@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { Home, Loader2, BedDouble, Users, Percent } from "lucide-react"
+import { useSearchParams } from "react-router-dom"
 import {
   Bar,
   BarChart,
@@ -18,6 +19,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { StatCardSkeletonGrid } from "@/components/ui/card-skeleton"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Table,
   TableBody,
@@ -34,12 +36,17 @@ import {
   EMPTY_HOSTEL_OVERVIEW,
 } from "../api/hostel.api"
 import { HostelManageDialog } from "../components/HostelManageDialog"
+import { StudentAdmissionLookupPanel } from "@/features/students/components/StudentAdmissionLookupPanel"
+import { getPendingHostelStudents } from "@/features/students/api/studentService.api"
 
 const PIE_COLORS = ["hsl(var(--primary))", "hsl(var(--muted-foreground) / 0.35)"]
 const BAR_FILL = "hsl(var(--primary) / 0.85)"
 
 export function HostelOverview() {
   const activeSchoolId = useAuth((s) => s.activeSchoolId)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab = searchParams.get("tab") ?? "overview"
+  const setTab = (value: string) => setSearchParams({ tab: value }, { replace: true })
 
   const { data: rooms, isLoading } = useQuery({
     queryKey: ["hostel-rooms", activeSchoolId],
@@ -59,6 +66,12 @@ export function HostelOverview() {
     enabled: !!activeSchoolId,
     placeholderData: EMPTY_HOSTEL_OVERVIEW,
     staleTime: 60_000,
+  })
+
+  const { data: pending = [] } = useQuery({
+    queryKey: ["pending-hostel", activeSchoolId],
+    queryFn: () => getPendingHostelStudents(activeSchoolId!),
+    enabled: !!activeSchoolId,
   })
 
   const h = overview
@@ -134,6 +147,69 @@ export function HostelOverview() {
         ) : null}
       </div>
 
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="pending">Pending requests ({pending.length})</TabsTrigger>
+          <TabsTrigger value="allocate">Allocate</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="pending" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Pending hostel requests</CardTitle>
+              <CardDescription>Students who requested hostel without an active room assignment</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {pending.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No pending hostel requests.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Admission no.</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Class</TableHead>
+                      <TableHead>Parent phone</TableHead>
+                      <TableHead />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pending.map((row) => (
+                      <TableRow key={row.student_id}>
+                        <TableCell className="font-mono text-sm">{row.admission_no}</TableCell>
+                        <TableCell>
+                          {row.first_name} {row.last_name}
+                        </TableCell>
+                        <TableCell>
+                          {[row.class_name, row.section_name].filter(Boolean).join(" - ") || "—"}
+                        </TableCell>
+                        <TableCell>{row.parent_phone ?? "—"}</TableCell>
+                        <TableCell>
+                          <button
+                            type="button"
+                            className="text-sm text-primary underline"
+                            onClick={() => setTab("allocate")}
+                          >
+                            Allocate
+                          </button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="allocate" className="mt-4">
+          {activeSchoolId && (
+            <StudentAdmissionLookupPanel schoolId={activeSchoolId} mode="hostel" />
+          )}
+        </TabsContent>
+
+        <TabsContent value="overview" className="mt-4 space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <DashboardStatCard title="Rooms" value={h.roomsTotal} description="All configured" icon={Home} />
         <DashboardStatCard
@@ -317,6 +393,8 @@ export function HostelOverview() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

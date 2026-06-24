@@ -52,6 +52,8 @@ import { getParentChildren, updateStudentDetails, getChildrenAttendance, getChil
 import { useAuth } from "@/features/auth/hooks/useAuth"
 import { useStudentDocumentsDisplayUrl } from "@/features/students/hooks/useStudentDocumentsDisplayUrl"
 import { ReportCardModal } from "./ReportCardModal"
+import { ClassTeacherCard } from "@/components/school/ClassTeacherCard"
+import { updateStudentServicePreference } from "@/features/students/api/studentService.api"
 
 const editChildSchema = z.object({
   first_name: z.string().min(1, "First name is required"),
@@ -100,6 +102,10 @@ type ParentChildRow = {
   section_name: string | null
   attendance_pct_this_month: number | null
   pending_fees: number | null
+  class_teacher_name?: string | null
+  class_teacher_phone?: string | null
+  class_teacher_email?: string | null
+  transport_mode?: string | null
 }
 
 function initials(name: string) {
@@ -140,6 +146,9 @@ function EditChildModal({
   onSuccess: () => void 
 }) {
   const [submitting, setSubmitting] = useState(false)
+  const [transportMode, setTransportMode] = useState<"self" | "school_bus" | "hostel">(
+    (child.transport_mode as "self" | "school_bus" | "hostel") ?? "self",
+  )
   
   const form = useForm<EditChildFormValues>({
     resolver: zodResolver(editChildSchema),
@@ -167,6 +176,10 @@ function EditChildModal({
       if (updates.email === "") updates.email = null
       
       await updateStudentDetails(child.student_id, updates)
+      const initialMode = (child.transport_mode as "self" | "school_bus" | "hostel") ?? "self"
+      if (transportMode !== initialMode) {
+        await updateStudentServicePreference(child.student_id, transportMode)
+      }
       toast.success("Student details updated successfully")
       onSuccess()
       onClose()
@@ -459,6 +472,24 @@ function EditChildModal({
                 </TabsContent>
               </Tabs>
 
+              <div className="space-y-2 border-t pt-4">
+                <Label>Service preferences</Label>
+                <p className="text-xs text-muted-foreground">
+                  Hostel or school bus requests appear in the VP allocation queue until assigned.
+                </p>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={transportMode}
+                  onChange={(e) =>
+                    setTransportMode(e.target.value as "self" | "school_bus" | "hostel")
+                  }
+                >
+                  <option value="self">Self / own transport</option>
+                  <option value="school_bus">School bus</option>
+                  <option value="hostel">Hostel</option>
+                </select>
+              </div>
+
               <div className="flex justify-end gap-3 pt-4 border-t shrink-0">
                 <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
                 <Button type="submit" disabled={submitting}>
@@ -732,6 +763,14 @@ export function ParentDashboard() {
                         ${Number(child.pending_fees ?? 0).toLocaleString()}
                       </span>
                     </div>
+                  </div>
+                  <div className="mt-3 p-3 border rounded-xl bg-muted/20">
+                    <ClassTeacherCard
+                      compact
+                      classTeacherName={child.class_teacher_name}
+                      classTeacherPhone={child.class_teacher_phone}
+                      classTeacherEmail={child.class_teacher_email}
+                    />
                   </div>
                   <Button 
                     variant="outline" 

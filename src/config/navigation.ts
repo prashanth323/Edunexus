@@ -122,6 +122,12 @@ export const SIDEBAR_LINKS: NavLink[] = [
     roles: [...PRINCIPAL_LIKE, "hr_manager", "receptionist"],
   },
   {
+    title: "Classes",
+    href: "/classes",
+    icon: GraduationCap,
+    roles: [...PRINCIPAL_LIKE, "school_admin"],
+  },
+  {
     title: "Attendance",
     href: "/attendance",
     icon: CalendarCheck,
@@ -244,6 +250,10 @@ export function getRolesAllowedForPath(pathname: string): readonly string[] | nu
 
   if (/\/exams\/[^/]+\/marks/.test(normalized)) {
     return ["principal", "vice_principal", "operations_admin", "school_admin", "teacher", "class_teacher"]
+  }
+
+  if (/\/staff\/[^/]+\/edit/.test(normalized)) {
+    return ["principal", "vice_principal", "hr_manager"]
   }
 
   for (const prefix of SUPER_ADMIN_ONLY_PATH_PREFIXES) {

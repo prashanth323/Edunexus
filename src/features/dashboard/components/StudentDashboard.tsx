@@ -6,7 +6,9 @@ import { Link } from "react-router-dom"
 import { Card, CardContent, CardDescription, CardFooter, CardGrid, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatCardSkeletonGrid } from "@/components/ui/card-skeleton"
 import { Button } from "@/components/ui/button"
+import { ClassTeacherCard } from "@/components/school/ClassTeacherCard"
 import { useAuth } from "@/features/auth/hooks/useAuth"
+import { getStudentClassTeacher } from "@/features/students/api/studentService.api"
 import {
   getStaggerItem,
   getStudentPageVariants,
@@ -169,6 +171,12 @@ export function StudentDashboard() {
     enabled: !!user?.id && !!activeSchoolId,
   })
 
+  const { data: classTeacher } = useQuery({
+    queryKey: ["student-class-teacher", info?.student_id],
+    queryFn: () => getStudentClassTeacher(info!.student_id!),
+    enabled: !!info?.student_id,
+  })
+
   const pageV = getStudentPageVariants(!!reduce)
   const staggerI = getStaggerItem(!!reduce)
   const hoverLift = getCardHoverLiftProps(!!reduce)
@@ -234,6 +242,16 @@ export function StudentDashboard() {
                   )}
                 </CardContent>
               </Card>
+
+              {info.class_name && (
+                <motion.div variants={staggerI} className="col-span-full sm:col-span-2 lg:col-span-3">
+                  <ClassTeacherCard
+                    classTeacherName={classTeacher?.class_teacher_name}
+                    classTeacherPhone={classTeacher?.class_teacher_phone}
+                    classTeacherEmail={classTeacher?.class_teacher_email}
+                  />
+                </motion.div>
+              )}
 
               <Card variants={staggerI}>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

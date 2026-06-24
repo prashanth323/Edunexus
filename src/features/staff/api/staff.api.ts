@@ -21,8 +21,11 @@ export type StaffMember = {
   avatar_url?: string | null
   role: string
   department?: string | null
+  department_id?: string | null
   designation?: string | null
   joining_date: string | null
+  employment_type?: string | null
+  is_active?: boolean
   status: "active" | "on_leave" | "resigned"
   qualifications: Qualification[]
   experience_years?: number | null
@@ -40,8 +43,10 @@ export async function getStaffMembers(schoolId: string) {
       id,
       school_id,
       profile_id,
+      department_id,
       designation,
       joining_date,
+      employment_type,
       is_active,
       deleted_at,
       experience_years,
@@ -116,8 +121,11 @@ export async function getStaffMembers(schoolId: string) {
       avatar_url: p?.avatar_url ?? null,
       role,
       department: deptName ?? null,
+      department_id: row.department_id ?? null,
       designation: row.designation ?? null,
       joining_date: row.joining_date ?? null,
+      employment_type: row.employment_type ?? null,
+      is_active: row.is_active ?? true,
       status,
       qualifications: (row.qualifications as Qualification[]) ?? [],
       experience_years: row.experience_years,
@@ -127,4 +135,44 @@ export async function getStaffMembers(schoolId: string) {
       lmsTeacherProfile: normalizeLmsTeacherProfile(row.lms_teacher_profile),
     }
   })
+}
+
+export async function getStaffMemberForEdit(staffId: string) {
+  const { data, error } = await supabase
+    .from("staff")
+    .select(
+      `
+      id,
+      school_id,
+      profile_id,
+      department_id,
+      designation,
+      joining_date,
+      employment_type,
+      experience_years,
+      specialization,
+      biography,
+      is_active,
+      profiles ( first_name, last_name, email, phone, gender, date_of_birth )
+    `,
+    )
+    .eq("id", staffId)
+    .maybeSingle()
+
+  if (error) throw error
+  if (!data) throw new Error("Staff member not found")
+  return data
+}
+
+export async function updateStaffProfileByAdmin(
+  staffId: string,
+  profile: Record<string, unknown>,
+  staff: Record<string, unknown>,
+) {
+  const { error } = await supabase.rpc("update_staff_profile_by_admin", {
+    p_staff_id: staffId,
+    p_profile: profile,
+    p_staff: staff,
+  })
+  if (error) throw error
 }

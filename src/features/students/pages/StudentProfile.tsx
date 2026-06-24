@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useParams, Link } from "react-router-dom"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
@@ -48,6 +48,12 @@ import { DocumentUpload } from "../components/DocumentUpload"
 import { TransferSectionDialog } from "../components/TransferSectionDialog"
 import { IdCardGenerator } from "../components/IdCardGenerator"
 import { buildStudentIdCardData } from "../lib/studentIdCardData"
+import { ClassTeacherCard } from "@/components/school/ClassTeacherCard"
+import {
+  getStudentClassTeacher,
+  updateStudentServicePreference,
+} from "../api/studentService.api"
+import { Label } from "@/components/ui/label"
 
 const editSchema = z.object({
   first_name: z.string().min(1),
@@ -64,7 +70,8 @@ const editSchema = z.object({
 
 type EditValues = z.infer<typeof editSchema>
 
-const CAN_EDIT = new Set(["principal", "school_admin", "admission_manager"])
+const CAN_EDIT = new Set(["principal", "school_admin", "admission_manager", "vice_principal"])
+const CAN_EDIT_SERVICE = new Set(["principal", "vice_principal", "school_admin", "admission_manager"])
 
 export function StudentProfile() {
   const { studentId } = useParams<{ studentId: string }>()
@@ -75,6 +82,8 @@ export function StudentProfile() {
   const [saving, setSaving] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
   const [generatingRoll, setGeneratingRoll] = useState(false)
+  const [transportMode, setTransportMode] = useState<"self" | "school_bus" | "hostel">("self")
+  const [savingService, setSavingService] = useState(false)
 
   const { data: student, isLoading } = useQuery({
     queryKey: ["student-profile", studentId],
@@ -88,7 +97,21 @@ export function StudentProfile() {
     enabled: !!student?.school_id,
   })
 
+  const { data: classTeacher } = useQuery({
+    queryKey: ["student-class-teacher", studentId],
+    queryFn: () => getStudentClassTeacher(studentId!),
+    enabled: !!studentId,
+  })
+
   const canEdit = CAN_EDIT.has(activeRole ?? "")
+  const canEditService = CAN_EDIT_SERVICE.has(activeRole ?? "")
+
+  useEffect(() => {
+    const mode = (student as { transport_mode?: string } | undefined)?.transport_mode
+    if (mode === "self" || mode === "school_bus" || mode === "hostel") {
+      setTransportMode(mode)
+    }
+  }, [student])
 
   const form = useForm<EditValues>({
     resolver: zodResolver(editSchema),
@@ -186,6 +209,22 @@ export function StudentProfile() {
   const fullName = `${student.first_name} ${student.last_name}`
   const enrollment = student.enrollment
   const totalPending = student.invoices.reduce((sum, inv) => sum + Number(inv.due_amount ?? 0), 0)
+
+  async function handleSaveServicePreference() {
+    if (!student) return
+    setSavingService(true)
+    try {
+      await updateStudentServicePreference(student.id, transportMode)
+      toast.success("Service preference updated")
+      qc.invalidateQueries({ queryKey: ["student-profile", studentId] })
+      qc.invalidateQueries({ queryKey: ["pending-hostel"] })
+      qc.invalidateQueries({ queryKey: ["pending-transport"] })
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Update failed")
+    } finally {
+      setSavingService(false)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500 max-w-5xl mx-auto">
@@ -328,6 +367,53 @@ export function StudentProfile() {
             <p className="text-xs text-muted-foreground mt-1">
               {student.parents.length === 0 ? "No parents linked" : student.parents.map((p) => p.relation).join(", ")}
             </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <ClassTeacherCard
+          classTeacherName={classTeacher?.class_teacher_name}
+          classTeacherPhone={classTeacher?.class_teacher_phone}
+          classTeacherEmail={classTeacher?.class_teacher_email}
+        />
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Service preferences</CardTitle>
+            <CardDescription>Hostel or school bus requests queue for VP allocation.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {canEditService ? (
+              <>
+                <div className="grid gap-1.5">
+                  <Label>Transport / boarding</Label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={transportMode}
+                    onChange={(e) =>
+                      setTransportMode(e.target.value as "self" | "school_bus" | "hostel")
+                    }
+                  >
+                    <option value="self">Self / own transport</option>
+                    <option value="school_bus">School bus</option>
+                    <option value="hostel">Hostel</option>
+                  </select>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={handleSaveServicePreference}
+                  disabled={savingService}
+                >
+                  {savingService && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save preference
+                </Button>
+              </>
+            ) : (
+              <p className="text-sm capitalize">
+                {(student as { transport_mode?: string }).transport_mode?.replace(/_/g, " ") ??
+                  "Self"}
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>

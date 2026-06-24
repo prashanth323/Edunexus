@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { Bus, Loader2, MapPin, Route, Users, Gauge } from "lucide-react"
+import { useSearchParams } from "react-router-dom"
 import {
   Bar,
   BarChart,
@@ -18,6 +19,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { StatCardSkeletonGrid } from "@/components/ui/card-skeleton"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Table,
   TableBody,
@@ -30,16 +32,22 @@ import { useAuth } from "@/features/auth/hooks/useAuth"
 import {
   getBuses,
   getRoutes,
+  getRouteStudents,
   getTransportPrincipalOverview,
   EMPTY_TRANSPORT_OVERVIEW,
 } from "../api/transport.api"
 import { TransportManageDialog } from "../components/TransportManageDialog"
+import { StudentAdmissionLookupPanel } from "@/features/students/components/StudentAdmissionLookupPanel"
+import { getPendingTransportStudents } from "@/features/students/api/studentService.api"
 
 const PIE_COLORS = ["hsl(var(--primary))", "hsl(var(--muted-foreground) / 0.35)"]
 const BAR_FILL = "hsl(var(--primary) / 0.85)"
 
 export function TransportOverview() {
   const activeSchoolId = useAuth((s) => s.activeSchoolId)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab = searchParams.get("tab") ?? "overview"
+  const setTab = (value: string) => setSearchParams({ tab: value }, { replace: true })
 
   const { data: buses, isLoading: busesLoading } = useQuery({
     queryKey: ["transport-buses", activeSchoolId],
@@ -60,6 +68,26 @@ export function TransportOverview() {
     placeholderData: EMPTY_TRANSPORT_OVERVIEW,
     staleTime: 60_000,
   })
+
+  const { data: pending = [] } = useQuery({
+    queryKey: ["pending-transport", activeSchoolId],
+    queryFn: () => getPendingTransportStudents(activeSchoolId!),
+    enabled: !!activeSchoolId,
+  })
+
+  const { data: routeStudents = [] } = useQuery({
+    queryKey: ["route-students", activeSchoolId],
+    queryFn: () => getRouteStudents(activeSchoolId!),
+    enabled: !!activeSchoolId,
+  })
+
+  const { data: routesList = [] } = useQuery({
+    queryKey: ["transport-routes-map", activeSchoolId],
+    queryFn: () => getRoutes(activeSchoolId!),
+    enabled: !!activeSchoolId,
+  })
+
+  const routeNameById = new Map(routesList.map((r) => [r.id, r.name]))
 
   const o = overview
 
@@ -132,6 +160,69 @@ export function TransportOverview() {
         ) : null}
       </div>
 
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="pending">Pending requests ({pending.length})</TabsTrigger>
+          <TabsTrigger value="allocate">Allocate</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="pending" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Pending transport requests</CardTitle>
+              <CardDescription>Students who requested school bus without an active route assignment</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {pending.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No pending transport requests.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Admission no.</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Class</TableHead>
+                      <TableHead>Parent phone</TableHead>
+                      <TableHead />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pending.map((row) => (
+                      <TableRow key={row.student_id}>
+                        <TableCell className="font-mono text-sm">{row.admission_no}</TableCell>
+                        <TableCell>
+                          {row.first_name} {row.last_name}
+                        </TableCell>
+                        <TableCell>
+                          {[row.class_name, row.section_name].filter(Boolean).join(" - ") || "—"}
+                        </TableCell>
+                        <TableCell>{row.parent_phone ?? "—"}</TableCell>
+                        <TableCell>
+                          <button
+                            type="button"
+                            className="text-sm text-primary underline"
+                            onClick={() => setTab("allocate")}
+                          >
+                            Allocate
+                          </button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="allocate" className="mt-4">
+          {activeSchoolId && (
+            <StudentAdmissionLookupPanel schoolId={activeSchoolId} mode="transport" />
+          )}
+        </TabsContent>
+
+        <TabsContent value="overview" className="mt-4 space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <DashboardStatCard title="Buses" value={o.busesTotal} description={`${o.busesActive} active`} icon={Bus} />
         <DashboardStatCard title="Routes" value={o.routesTotal} description={`${o.routesActive} active`} icon={Route} />
@@ -309,6 +400,42 @@ export function TransportOverview() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Students on routes
+          </CardTitle>
+          <CardDescription>Active route assignments for the current school</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {routeStudents.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No students assigned to routes yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Student</TableHead>
+                  <TableHead>Admission no.</TableHead>
+                  <TableHead>Route</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {routeStudents.map((rs) => (
+                  <TableRow key={rs.id}>
+                    <TableCell>{rs.students?.profiles?.full_name ?? "—"}</TableCell>
+                    <TableCell>{rs.students?.admission_no ?? "—"}</TableCell>
+                    <TableCell>{routeNameById.get(rs.route_id) ?? "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

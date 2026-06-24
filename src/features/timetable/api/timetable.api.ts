@@ -219,13 +219,9 @@ export async function deleteTimetableSlot(id: string) {
 
 /** Assign (or unassign) class teacher for a section */
 export async function assignClassTeacher(sectionId: string, staffId: string | null) {
-  const { data, error } = await supabase
-    .from("sections")
-    .update({ class_teacher_id: staffId })
-    .eq("id", sectionId)
-    .select()
-    .single()
-
+  const { error } = await supabase.rpc("assign_class_teacher", {
+    p_section_id: sectionId,
+    p_staff_id: staffId,
+  })
   if (error) throw error
-  return data
 }

@@ -37,6 +37,21 @@ export function ClassTeacherAssigner({ schoolId, section, onSaved }: Props) {
 
   const changed = staffId !== (section.class_teacher_staff_id ?? "")
 
+  const teacherStaff = staff.filter((s) => {
+    const d = (s.designation ?? "").toLowerCase()
+    return d.includes("teacher") || d.includes("faculty") || d.includes("tutor")
+  })
+  const currentInList = teacherStaff.some((s) => s.id === section.class_teacher_staff_id)
+  const staffOptions =
+    section.class_teacher_staff_id && !currentInList
+      ? [
+          ...teacherStaff,
+          staff.find((s) => s.id === section.class_teacher_staff_id)!,
+        ].filter(Boolean)
+      : teacherStaff.length > 0
+        ? teacherStaff
+        : staff
+
   return (
     <div className="flex items-center gap-2">
       <div className="flex items-center gap-1.5 text-muted-foreground min-w-0">
@@ -52,7 +67,7 @@ export function ClassTeacherAssigner({ schoolId, section, onSaved }: Props) {
         disabled={isLoading || mut.isPending}
       >
         <option value="">— None —</option>
-        {staff.map((s) => (
+        {staffOptions.map((s) => (
           <option key={s.id} value={s.id}>
             {s.name}
           </option>

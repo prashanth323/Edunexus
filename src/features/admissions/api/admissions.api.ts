@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase"
 import { createLead as crmCreateLead, type CreateLeadInput } from "@/features/crm/api/crm.api"
 import { listClasses, listSectionsForYear } from "@/features/students/api/academics.api"
+import { updateStudentServicePreference } from "@/features/students/api/studentService.api"
 
 export { type CreateLeadInput }
 export const createLead = crmCreateLead
@@ -482,6 +483,8 @@ export async function approveAdmissionApplication(
   feeBreakdown?: FeeBreakdownLine[],
   options?: {
     transportMode?: "self" | "school_bus" | "hostel"
+    needsHostel?: boolean
+    needsTransport?: boolean
     routeId?: string | null
     hostelRoomId?: string | null
   },
@@ -507,11 +510,24 @@ export async function approveAdmissionApplication(
     p_concession_overrides: concessionOverrides,
     p_route_id: options?.routeId ?? null,
     p_hostel_room_id: options?.hostelRoomId ?? null,
-    p_transport_mode: transportMode,
+    p_transport_mode: "self",
   })
 
   if (error) throw error
   if (!studentId) throw new Error("Approval did not return a student id")
+
+  const serviceIntent: "self" | "school_bus" | "hostel" =
+    transportMode !== "self"
+      ? transportMode
+      : options?.needsHostel
+        ? "hostel"
+        : options?.needsTransport
+          ? "school_bus"
+          : "self"
+
+  if (serviceIntent !== "self") {
+    await updateStudentServicePreference(String(studentId), serviceIntent)
+  }
 
   const { data: student, error: stuErr } = await supabase
     .from("students")

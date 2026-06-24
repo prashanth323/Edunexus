@@ -70,8 +70,10 @@ export function AdmissionReviewDialog({ app, open, onClose, onDone }: Props) {
       approveAdmissionApplication(
         app.id,
         breakdown.length ? breakdown : undefined,
-        // Remote RPC requires route/room when mode is school_bus/hostel — use self until pickers exist.
-        { transportMode: "self" },
+        {
+          needsHostel: app.needs_hostel,
+          needsTransport: app.needs_transport,
+        },
       ),
     onSuccess: (result) => {
       toast.success(`Approved — admission no. ${result.admissionNo}`)

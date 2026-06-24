@@ -24,6 +24,8 @@ import { LmsCoursePlayerPage } from "@/features/lms/pages/LmsCoursePlayerPage"
 import { LmsDashboard } from "@/features/lms/pages/LmsDashboard"
 import { HomeworkDashboard } from "@/features/homework/pages/HomeworkDashboard"
 import { StaffDirectory } from "@/features/staff/pages/StaffDirectory"
+import { StaffProfileEdit } from "@/features/staff/pages/StaffProfileEdit"
+import { VpClassesOverview } from "@/features/classes/pages/VpClassesOverview"
 import { NoticesBoard } from "@/features/notices/pages/NoticesBoard"
 import { TransportOverview } from "@/features/transport/pages/TransportOverview"
 import { HostelOverview } from "@/features/hostel/pages/HostelOverview"
@@ -204,6 +206,22 @@ export const router = createBrowserRouter([
             element: (
               <RequireRole>
                 <StaffDirectory />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "staff/:staffId/edit",
+            element: (
+              <RequireRole>
+                <StaffProfileEdit />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "classes",
+            element: (
+              <RequireRole>
+                <VpClassesOverview />
               </RequireRole>
             ),
           },

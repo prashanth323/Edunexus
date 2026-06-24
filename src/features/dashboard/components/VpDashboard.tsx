@@ -11,6 +11,10 @@ import { getLeads } from "@/features/crm/api/crm.api"
 import { getPendingApprovalApplications } from "@/features/admissions/api/admissions.api"
 import { getStudentsPendingPortalLogin } from "@/features/students/api/students.api"
 import { PendingStudentLoginPanel } from "@/features/students/components/PendingStudentLoginPanel"
+import {
+  getPendingHostelStudents,
+  getPendingTransportStudents,
+} from "@/features/students/api/studentService.api"
 
 export function VpDashboard() {
   const activeSchoolId = useAuth((s) => s.activeSchoolId)
@@ -39,6 +43,18 @@ export function VpDashboard() {
     enabled: !!activeSchoolId,
   })
 
+  const { data: pendingHostel = [] } = useQuery({
+    queryKey: ["pending-hostel", activeSchoolId],
+    queryFn: () => getPendingHostelStudents(activeSchoolId!),
+    enabled: !!activeSchoolId,
+  })
+
+  const { data: pendingTransport = [] } = useQuery({
+    queryKey: ["pending-transport", activeSchoolId],
+    queryFn: () => getPendingTransportStudents(activeSchoolId!),
+    enabled: !!activeSchoolId,
+  })
+
   const today = new Date().toISOString().slice(0, 10)
   const walkInsToday = leads.filter(
     (l) => l.created_at.startsWith(today) && l.lead_sources?.name?.toLowerCase().includes("walk"),
@@ -46,7 +62,7 @@ export function VpDashboard() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -76,9 +92,38 @@ export function VpDashboard() {
         </Link>
         <Card>
           <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Home className="h-4 w-4" /> Pending hostel
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{pendingHostel.length}</div>
+            <Button variant="link" className="h-auto p-0 text-xs" asChild>
+              <Link to="/hostel?tab=pending">Allocate rooms</Link>
+            </Button>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Bus className="h-4 w-4" /> Pending transport
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{pendingTransport.length}</div>
+            <Button variant="link" className="h-auto p-0 text-xs" asChild>
+              <Link to="/transport?tab=pending">Assign routes</Link>
+            </Button>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Quick links</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" asChild>
+              <Link to="/classes"><GraduationCap className="h-3 w-3 mr-1" /> Classes</Link>
+            </Button>
             <Button size="sm" variant="outline" asChild>
               <Link to="/students"><GraduationCap className="h-3 w-3 mr-1" /> Students</Link>
             </Button>
