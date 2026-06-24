@@ -16,6 +16,11 @@ export type SchoolInviteRow = {
   role: string
   admission_no?: string
   auto_admission_no?: boolean
+  /** Link an existing student row (e.g. after admission approval). */
+  student_id?: string
+  parent_id?: string
+  skip_enrollment?: boolean
+  skip_fee_invoices?: boolean
   /** Required for `parent` role. */
   phone?: string
   /** When inviting a student, optional guardians (invite email + link). */

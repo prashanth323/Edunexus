@@ -41,6 +41,10 @@ type InviteRow = {
   role?: string
   admission_no?: string
   auto_admission_no?: boolean
+  student_id?: string
+  parent_id?: string
+  skip_enrollment?: boolean
+  skip_fee_invoices?: boolean
   /** Required when role is parent (DB constraint). */
   phone?: string
   /** When role is student, optional guardians to invite and link. */
@@ -541,48 +545,76 @@ Deno.serve(async (req) => {
     }
 
     if (role === "student") {
-      let admissionNo = inv.admission_no?.trim()
-      if (!admissionNo && inv.auto_admission_no) {
-        const { data: gen, error: genErr } = await admin.rpc("generate_admission_no", {
-          p_school_id: schoolId,
-        })
-        if (genErr || gen == null) {
-          results.push({ email, ok: false, error: genErr?.message ?? "Could not generate admission number" })
+      const linkStudentId = inv.student_id?.trim()
+
+      if (linkStudentId) {
+        const { data: linkedStu, error: linkStuErr } = await admin
+          .from("students")
+          .select("id, profile_id")
+          .eq("id", linkStudentId)
+          .eq("school_id", schoolId)
+          .maybeSingle()
+
+        if (linkStuErr || !linkedStu) {
+          results.push({ email, ok: false, error: linkStuErr?.message ?? "Student record not found" })
           continue
         }
-        admissionNo = String(gen)
-      }
-      if (!admissionNo) {
-        results.push({ email, ok: false, error: "admission_no or auto_admission_no required for students" })
-        continue
-      }
-
-      const { data: existingStu } = await admin
-        .from("students")
-        .select("id")
-        .eq("school_id", schoolId)
-        .eq("profile_id", userId)
-        .maybeSingle()
-
-      if (!existingStu) {
-        const fn = first_name || email.split("@")[0]
-        const ln = last_name || ""
-        const { error: stuErr } = await admin.from("students").insert({
-          school_id: schoolId,
-          profile_id: userId,
-          admission_no: admissionNo,
-          first_name: fn,
-          last_name: ln,
-          is_active: true,
-        })
-        if (stuErr) {
-          results.push({ email, ok: false, error: stuErr.message })
+        if (linkedStu.profile_id && linkedStu.profile_id !== userId) {
+          results.push({ email, ok: false, error: "Student already linked to another login" })
           continue
+        }
+        const { error: upStuErr } = await admin
+          .from("students")
+          .update({ profile_id: userId, email })
+          .eq("id", linkStudentId)
+        if (upStuErr) {
+          results.push({ email, ok: false, error: upStuErr.message })
+          continue
+        }
+      } else {
+        let admissionNo = inv.admission_no?.trim()
+        if (!admissionNo && inv.auto_admission_no) {
+          const { data: gen, error: genErr } = await admin.rpc("generate_admission_no", {
+            p_school_id: schoolId,
+          })
+          if (genErr || gen == null) {
+            results.push({ email, ok: false, error: genErr?.message ?? "Could not generate admission number" })
+            continue
+          }
+          admissionNo = String(gen)
+        }
+        if (!admissionNo) {
+          results.push({ email, ok: false, error: "admission_no or auto_admission_no required for students" })
+          continue
+        }
+
+        const { data: existingStu } = await admin
+          .from("students")
+          .select("id")
+          .eq("school_id", schoolId)
+          .eq("profile_id", userId)
+          .maybeSingle()
+
+        if (!existingStu) {
+          const fn = first_name || email.split("@")[0]
+          const ln = last_name || "—"
+          const { error: stuErr } = await admin.from("students").insert({
+            school_id: schoolId,
+            profile_id: userId,
+            admission_no: admissionNo,
+            first_name: fn,
+            last_name: ln,
+            is_active: true,
+          })
+          if (stuErr) {
+            results.push({ email, ok: false, error: stuErr.message })
+            continue
+          }
         }
       }
 
       // Auto-generate invoices for selected fee structures
-      if (inv.fee_structure_ids && inv.fee_structure_ids.length > 0) {
+      if (!inv.skip_fee_invoices && inv.fee_structure_ids && inv.fee_structure_ids.length > 0) {
         const { data: stuForFee } = await admin
           .from("students")
           .select("id")
@@ -673,7 +705,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (role === "student") {
+    if (role === "student" && !inv.skip_enrollment) {
       const sid = typeof inv.section_id === "string" ? inv.section_id.trim() : ""
       if (sid) {
         const { data: stuForClass } = await admin

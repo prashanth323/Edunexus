@@ -11,7 +11,7 @@ import {
   getFilteredRowModel,
 } from "@tanstack/react-table"
 import { Plus, Search, MoreHorizontal, ArrowUpDown, Loader2, X, GraduationCap, FileUp } from "lucide-react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -36,9 +36,16 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 import { flattenSectionOptionsForCurrentYear, getCurrentAcademicYearMeta } from "../api/academics.api"
-import { getStudents, type Student } from "../api/students.api"
+import {
+  getStudents,
+  getStudentsPendingPortalLogin,
+  type Student,
+  type StudentPendingPortalLogin,
+} from "../api/students.api"
 import { AssignSectionDropdownItems } from "../components/AssignSectionDropdown"
 import { ManageClassesPanel } from "../components/ManageClassesDialog"
+import { PendingStudentLoginPanel } from "../components/PendingStudentLoginPanel"
+import { AdmissionNumberLoginPanel } from "@/features/admissions/components/AdmissionNumberLoginPanel"
 import { useAuth } from "@/features/auth/hooks/useAuth"
 import { inviteSchoolUsers, type SchoolInviteRow, type ParentInvitePayload } from "@/features/invites/api/invites.api"
 import { toast } from "sonner"
@@ -152,6 +159,8 @@ export function StudentsList() {
   const activeSchoolId = useAuth((state) => state.activeSchoolId)
   const activeRole = useAuth((state) => state.activeRole)
   const queryClient = useQueryClient()
+  const [searchParams] = useSearchParams()
+  const admissionNoFromUrl = searchParams.get("admissionNo") ?? ""
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = useState("")
@@ -180,6 +189,7 @@ export function StudentsList() {
   const [g2Phone, setG2Phone] = useState("")
   const [g2Relation, setG2Relation] = useState("mother")
   const [g2Primary, setG2Primary] = useState(false)
+  const [linkStudentId, setLinkStudentId] = useState<string | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ["students", activeSchoolId],
@@ -190,6 +200,12 @@ export function StudentsList() {
   const students = data ?? EMPTY_STUDENTS
 
   const canManageAcademics = CAN_MANAGE_ACADEMICS.has(activeRole ?? "")
+
+  const { data: pendingLogins = [] } = useQuery({
+    queryKey: ["students-pending-login", activeSchoolId],
+    queryFn: () => getStudentsPendingPortalLogin(activeSchoolId!),
+    enabled: !!activeSchoolId && canManageAcademics,
+  })
 
   const assignSectionProps = useMemo(
     () => ({
@@ -259,7 +275,28 @@ export function StudentsList() {
     onGlobalFilterChange: setGlobalFilter,
   })
 
-  const openStudentInvite = () => setInviteOpen(true)
+  const openStudentInvite = () => {
+    setLinkStudentId(null)
+    setInviteOpen(true)
+  }
+
+  function openInviteForPending(row: StudentPendingPortalLogin) {
+    setSingleEmail(row.email ?? "")
+    setSingleFirst(row.first_name)
+    setSingleLast(row.last_name)
+    setAdmissionNo(row.admission_no)
+    setAutoAdmission(false)
+    setLinkStudentId(row.id)
+    if (row.parentNeedsLogin && row.parentEmail) {
+      setG1Email(row.parentEmail)
+      setG1First(row.parentFirstName ?? "")
+      setG1Last(row.parentLastName ?? "")
+      setG1Phone(row.parentPhone ?? "")
+      setG1Relation("guardian")
+      setG1Primary(true)
+    }
+    setInviteOpen(true)
+  }
 
   async function submitStudentInvites(invitations: SchoolInviteRow[]) {
     if (!activeSchoolId) return
@@ -282,10 +319,12 @@ export function StudentsList() {
       
       if (okCount) {
         await queryClient.invalidateQueries({ queryKey: ["students", activeSchoolId] })
-        // Only close if no errors, or if some succeeded we might want to stay open to show which failed
+        await queryClient.invalidateQueries({ queryKey: ["students-pending-login", activeSchoolId] })
         if (failed.length === 0) {
           setInviteOpen(false)
         }
+
+        setLinkStudentId(null)
         
         // Clear single invite fields
         setSingleEmail("")
@@ -375,9 +414,14 @@ export function StudentsList() {
         role: "student",
         admission_no: autoAdmission ? undefined : admissionNo.trim(),
         auto_admission_no: autoAdmission,
+        student_id: linkStudentId ?? undefined,
+        skip_enrollment: !!linkStudentId,
+        skip_fee_invoices: !!linkStudentId,
         parents: parents.length ? parents : undefined,
-        ...(inviteSectionId ? { section_id: inviteSectionId } : {}),
-        ...(selectedFeeStructures.length ? { fee_structure_ids: selectedFeeStructures } : {}),
+        ...(inviteSectionId && !linkStudentId ? { section_id: inviteSectionId } : {}),
+        ...(selectedFeeStructures.length && !linkStudentId
+          ? { fee_structure_ids: selectedFeeStructures }
+          : {}),
       },
     ])
   }
@@ -433,6 +477,12 @@ export function StudentsList() {
             </Button>
           </CardHeader>
           <CardContent className="space-y-6">
+            {linkStudentId && (
+              <p className="text-xs text-muted-foreground rounded-md border bg-muted/40 p-3">
+                Linking portal login to an existing admitted student record. Class and fees from
+                admission are kept as-is.
+              </p>
+            )}
             <form onSubmit={handleSingleStudent} className="space-y-3">
               <p className="text-sm font-medium">Single student</p>
               <div className="grid gap-2 sm:grid-cols-2">
@@ -448,11 +498,23 @@ export function StudentsList() {
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="stu-fn">First name</Label>
-                  <Input id="stu-fn" value={singleFirst} onChange={(e) => setSingleFirst(e.target.value)} />
+                  <Input
+                    id="stu-fn"
+                    value={singleFirst}
+                    onChange={(e) => setSingleFirst(e.target.value)}
+                    readOnly={!!linkStudentId}
+                    className={linkStudentId ? "bg-muted/50" : undefined}
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="stu-ln">Last name</Label>
-                  <Input id="stu-ln" value={singleLast} onChange={(e) => setSingleLast(e.target.value)} />
+                  <Input
+                    id="stu-ln"
+                    value={singleLast}
+                    onChange={(e) => setSingleLast(e.target.value)}
+                    readOnly={!!linkStudentId}
+                    className={linkStudentId ? "bg-muted/50" : undefined}
+                  />
                 </div>
                 <div className="sm:col-span-2 flex items-center gap-2">
                   <input
@@ -460,6 +522,7 @@ export function StudentsList() {
                     type="checkbox"
                     checked={autoAdmission}
                     onChange={(e) => setAutoAdmission(e.target.checked)}
+                    disabled={!!linkStudentId}
                   />
                   <Label htmlFor="stu-auto" className="font-normal cursor-pointer">
                     Auto-generate admission number
@@ -468,12 +531,18 @@ export function StudentsList() {
                 {!autoAdmission && (
                   <div className="sm:col-span-2 space-y-1.5">
                     <Label htmlFor="stu-adm">Admission number</Label>
-                    <Input id="stu-adm" value={admissionNo} onChange={(e) => setAdmissionNo(e.target.value)} />
+                    <Input
+                      id="stu-adm"
+                      value={admissionNo}
+                      onChange={(e) => setAdmissionNo(e.target.value)}
+                      readOnly={!!linkStudentId}
+                      className={linkStudentId ? "bg-muted/50" : undefined}
+                    />
                   </div>
                 )}
               </div>
 
-              {canManageAcademics ? (
+              {canManageAcademics && !linkStudentId ? (
                 <div className="space-y-2">
                   <Label htmlFor="invite-section">Assign to section (optional, current academic year)</Label>
                   <select
@@ -499,6 +568,7 @@ export function StudentsList() {
               ) : null}
 
               {/* Fee structure selection */}
+              {!linkStudentId && (
               <div className="space-y-2">
                 <Label>Assign fee structures (optional)</Label>
                 {feeStructuresLoading ? (
@@ -537,6 +607,7 @@ export function StudentsList() {
                   Selected fee structures will auto-generate invoices for this student.
                 </p>
               </div>
+              )}
 
               <div className="border-t pt-4 space-y-4">
                 <p className="text-sm font-medium">Guardians (optional)</p>
@@ -763,6 +834,22 @@ export function StudentsList() {
           </Button>
         </div>
       </div>
+
+      {canManageAcademics && activeSchoolId && (
+        <AdmissionNumberLoginPanel
+          key={admissionNoFromUrl || "lookup"}
+          schoolId={activeSchoolId}
+          initialAdmissionNo={admissionNoFromUrl}
+          onInvite={openInviteForPending}
+        />
+      )}
+
+      {canManageAcademics && (
+        <PendingStudentLoginPanel
+          pending={pendingLogins}
+          onInvite={openInviteForPending}
+        />
+      )}
 
       <div className="rounded-md border bg-card text-card-foreground shadow-sm">
         <div className="p-4 flex items-center justify-between">

@@ -1,16 +1,16 @@
 import { useQuery } from "@tanstack/react-query"
-import { ArrowRight, Bus, CalendarCheck, ClipboardCheck, Home, Target, Users } from "lucide-react"
+import { ArrowRight, Bus, ClipboardCheck, GraduationCap, Home, Target, Users } from "lucide-react"
 import { Link } from "react-router-dom"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/features/auth/hooks/useAuth"
 import { PrincipalDashboard } from "./PrincipalDashboard"
 import { getCrmManagerDashboard } from "../api/dashboard.api"
 import { getLeads } from "@/features/crm/api/crm.api"
-import { getApplications } from "@/features/admissions/api/admissions.api"
-import { getHalfDayRequests } from "@/features/attendance/api/halfDay.api"
+import { getPendingApprovalApplications } from "@/features/admissions/api/admissions.api"
+import { getStudentsPendingPortalLogin } from "@/features/students/api/students.api"
+import { PendingStudentLoginPanel } from "@/features/students/components/PendingStudentLoginPanel"
 
 export function VpDashboard() {
   const activeSchoolId = useAuth((s) => s.activeSchoolId)
@@ -23,19 +23,19 @@ export function VpDashboard() {
 
   const { data: pendingApps = [] } = useQuery({
     queryKey: ["vp-pending-apps", activeSchoolId],
-    queryFn: () => getApplications(activeSchoolId!, { status: "under_review" }),
-    enabled: !!activeSchoolId,
-  })
-
-  const { data: halfDayPending = [] } = useQuery({
-    queryKey: ["vp-half-day-pending", activeSchoolId],
-    queryFn: () => getHalfDayRequests(activeSchoolId!, "pending"),
+    queryFn: () => getPendingApprovalApplications(activeSchoolId!),
     enabled: !!activeSchoolId,
   })
 
   const { data: leads = [] } = useQuery({
     queryKey: ["vp-walkins-today", activeSchoolId],
     queryFn: () => getLeads(activeSchoolId!),
+    enabled: !!activeSchoolId,
+  })
+
+  const { data: pendingLogins = [] } = useQuery({
+    queryKey: ["students-pending-login", activeSchoolId],
+    queryFn: () => getStudentsPendingPortalLogin(activeSchoolId!),
     enabled: !!activeSchoolId,
   })
 
@@ -46,7 +46,7 @@ export function VpDashboard() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -71,24 +71,17 @@ export function VpDashboard() {
             </Button>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <CalendarCheck className="h-4 w-4" /> Half-day requests
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{halfDayPending.length}</div>
-            {halfDayPending.length > 0 && (
-              <Badge variant="secondary" className="mt-1">Awaiting VP approval</Badge>
-            )}
-          </CardContent>
-        </Card>
+        <Link to="/students" className="block h-full">
+          <PendingStudentLoginPanel pending={pendingLogins} onInvite={() => {}} compact />
+        </Link>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Quick links</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" asChild>
+              <Link to="/students"><GraduationCap className="h-3 w-3 mr-1" /> Students</Link>
+            </Button>
             <Button size="sm" variant="outline" asChild>
               <Link to="/transport"><Bus className="h-3 w-3 mr-1" /> Transport</Link>
             </Button>
