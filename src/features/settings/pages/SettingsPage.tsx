@@ -38,13 +38,12 @@ import { defaultLmsTeacherProfile, type LmsTeacherProfile } from "@/features/set
 import { getSubjects } from "@/features/lms/api/lms.api"
 import { supabase } from "@/lib/supabase"
 import { invalidateAfterSignedInProfileDetailsSaved } from "@/lib/invalidateProfilePortraits"
-
-const TEACHING_SUBJECT_ROLES = new Set(["teacher", "class_teacher", "librarian"])
+import { hasAnySchoolRole, hasAnyTeachingRole } from "@/features/auth/lib/schoolRoles"
 
 export function SettingsPage() {
-  const { profile, user, activeSchoolId, activeRole } = useAuth()
-  const canSetTeachingSubject = TEACHING_SUBJECT_ROLES.has(activeRole ?? "")
-  const requiresTeacherTeachingProfile = activeRole === "teacher" || activeRole === "class_teacher"
+  const { profile, user, activeSchoolId, activeRole, schoolRoles } = useAuth()
+  const canSetTeachingSubject = hasAnySchoolRole(schoolRoles, ["teacher", "class_teacher", "librarian"])
+  const requiresTeacherTeachingProfile = hasAnyTeachingRole(schoolRoles)
   const qc = useQueryClient()
   const [passwordSubmitting, setPasswordSubmitting] = useState(false)
   const [profileSubmitting, setProfileSubmitting] = useState(false)

@@ -22,6 +22,7 @@ import {
   ATTENDANCE_STATUS_BADGE_CLASSES,
   fetchDailyAttendanceForStudent,
 } from "../lib/dailyAttendanceRead"
+import { AttendanceTodayBanner } from "../components/AttendanceTodayBanner"
 
 type ParentChild = {
   student_id: string
@@ -99,6 +100,15 @@ export function AttendanceParentView() {
     queryFn: () => fetchDailyAttendanceForStudent(selectedChild!, fromDate, toDate),
     enabled: !!selectedChild && !!fromDate && !!toDate,
   })
+
+  const todayStr = today.toISOString().split("T")[0]
+
+  const { data: todayAttendance = [] } = useQuery({
+    queryKey: ["child-attendance-today", selectedChild, todayStr],
+    queryFn: () => fetchDailyAttendanceForStudent(selectedChild!, todayStr, todayStr),
+    enabled: !!selectedChild,
+  })
+  const todayRow = todayAttendance[0]
 
   const stats = {
     total: attendance.length,
@@ -181,6 +191,10 @@ export function AttendanceParentView() {
           View attendance history for your children.
         </p>
       </div>
+
+      {todayRow && (
+        <AttendanceTodayBanner status={todayRow.status} remarks={todayRow.remarks} />
+      )}
 
       <div className="grid gap-6 md:grid-cols-4 items-start">
         <Card className="md:col-span-1">
@@ -277,7 +291,7 @@ export function AttendanceParentView() {
                       <TableHead>Date</TableHead>
                       <TableHead>Day</TableHead>
                       <TableHead className="text-center">Status</TableHead>
-                      <TableHead>Parent Reason / Remarks</TableHead>
+                      <TableHead>Notes</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -290,7 +304,10 @@ export function AttendanceParentView() {
                         day: "numeric",
                       })
 
-                      const isAbsentOrLate = row.status !== "present"
+                      const isLateOrHalf =
+                        row.status === "late" || row.status === "half_day"
+                      const isAbsent = row.status === "absent"
+                      const showParentReason = isAbsent
                       const isEditing = editingRowId === row.id
 
                       return (
@@ -306,9 +323,22 @@ export function AttendanceParentView() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            {isAbsentOrLate ? (
+                            {isLateOrHalf ? (
+                              <div className="space-y-1 py-1">
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">
+                                  School note
+                                </p>
+                                <p className="text-xs text-foreground">
+                                  {row.remarks || "No note recorded by reception."}
+                                </p>
+                              </div>
+                            ) : showParentReason ? (
                               isEditing ? (
-                                <div className="flex items-center gap-2 max-w-sm">
+                                <div className="space-y-1">
+                                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">
+                                    Your reason
+                                  </p>
+                                  <div className="flex items-center gap-2 max-w-sm">
                                   <Input
                                     value={reasonText}
                                     onChange={(e) => setReasonText(e.target.value)}
@@ -340,8 +370,13 @@ export function AttendanceParentView() {
                                     Cancel
                                   </Button>
                                 </div>
+                                </div>
                               ) : (
-                                <div className="flex items-center justify-between gap-4 py-1">
+                                <div className="space-y-1 py-1">
+                                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">
+                                    Your reason
+                                  </p>
+                                  <div className="flex items-center justify-between gap-4">
                                   <span className={`text-xs ${row.remarks ? "text-foreground font-medium" : "text-muted-foreground italic"}`}>
                                     {row.remarks || "No reason provided yet."}
                                   </span>
@@ -355,8 +390,9 @@ export function AttendanceParentView() {
                                     }}
                                   >
                                     <Edit2 className="h-2.5 w-2.5" />
-                                    {row.remarks ? "Edit Reason" : "Provide Reason"}
+                                    {row.remarks ? "Edit reason" : "Provide reason"}
                                   </Button>
+                                </div>
                                 </div>
                               )
                             ) : (

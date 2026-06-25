@@ -12,6 +12,54 @@ export type FeeStructure = {
   description: string | null
   is_active: boolean
   created_at: string
+  class_id: string | null
+  term_order: number | null
+  term_label: string | null
+  class_fee_plan_id: string | null
+  approval_status: string | null
+  classes?: { name: string } | null
+}
+
+export type FeeStructureGroup = {
+  classId: string
+  className: string
+  terms: {
+    termOrder: number
+    termLabel: string
+    items: FeeStructure[]
+  }[]
+}
+
+export function groupFeeStructuresByClassAndTerm(structures: FeeStructure[]): FeeStructureGroup[] {
+  const approved = structures.filter(
+    (s) => s.approval_status === "approved" || s.approval_status == null,
+  )
+  const byClass = new Map<string, FeeStructureGroup>()
+
+  for (const fs of approved) {
+    const classId = fs.class_id ?? "unassigned"
+    const className =
+      (Array.isArray(fs.classes) ? fs.classes[0]?.name : fs.classes?.name) ?? "General"
+    if (!byClass.has(classId)) {
+      byClass.set(classId, { classId, className, terms: [] })
+    }
+    const group = byClass.get(classId)!
+    const termOrder = fs.term_order ?? 0
+    const termLabel = fs.term_label ?? "Fees"
+    let term = group.terms.find((t) => t.termOrder === termOrder)
+    if (!term) {
+      term = { termOrder, termLabel, items: [] }
+      group.terms.push(term)
+    }
+    term.items.push(fs)
+  }
+
+  return Array.from(byClass.values())
+    .map((g) => ({
+      ...g,
+      terms: g.terms.sort((a, b) => a.termOrder - b.termOrder),
+    }))
+    .sort((a, b) => a.className.localeCompare(b.className))
 }
 
 export type FeeStructureInput = {
@@ -27,12 +75,20 @@ export type FeeStructureInput = {
 export async function getFeeStructures(schoolId: string) {
   const { data, error } = await supabase
     .from("fee_structures")
-    .select("*")
+    .select(
+      "id, school_id, name, amount, frequency, due_day, late_fine_per_day, description, is_active, created_at, class_id, term_order, term_label, class_fee_plan_id, approval_status, classes ( name )",
+    )
     .eq("school_id", schoolId)
     .eq("is_active", true)
+    .order("class_id")
+    .order("term_order")
     .order("name")
   if (error) throw error
-  return data as FeeStructure[]
+  return (data ?? []).map((row) => {
+    const classes = row.classes
+    const cls = Array.isArray(classes) ? classes[0] : classes
+    return { ...row, classes: cls } as FeeStructure
+  })
 }
 
 export async function createFeeStructure(schoolId: string, input: FeeStructureInput) {

@@ -74,6 +74,7 @@ export async function getUserProfile(userId: string) {
       user_roles!user_roles_user_id_fkey (
         role,
         school_id,
+        is_active,
         schools (name, logo_url)
       )
     `)

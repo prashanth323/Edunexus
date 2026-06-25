@@ -176,3 +176,41 @@ export async function updateStaffProfileByAdmin(
   })
   if (error) throw error
 }
+
+export type StaffTeachingRoles = {
+  subjectTeacher: boolean
+  classTeacher: boolean
+}
+
+export async function getStaffTeachingRoles(staffId: string): Promise<StaffTeachingRoles> {
+  const { data, error } = await supabase.rpc("get_staff_teaching_roles", {
+    p_staff_id: staffId,
+  })
+  if (error) throw error
+  const row = Array.isArray(data) ? data[0] : data
+  return {
+    subjectTeacher: Boolean(row?.subject_teacher),
+    classTeacher: Boolean(row?.class_teacher),
+  }
+}
+
+export async function setStaffTeachingRoles(
+  staffId: string,
+  subjectTeacher: boolean,
+  classTeacher: boolean,
+): Promise<void> {
+  const { error } = await supabase.rpc("set_staff_teaching_roles", {
+    p_staff_id: staffId,
+    p_subject_teacher: subjectTeacher,
+    p_class_teacher: classTeacher,
+  })
+  if (error) throw error
+}
+
+export function teachingRoleBadges(roles: string): string[] {
+  const set = new Set(roles.split(",").map((r) => r.trim()))
+  const badges: string[] = []
+  if (set.has("teacher")) badges.push("Subject")
+  if (set.has("class_teacher")) badges.push("Class")
+  return badges
+}

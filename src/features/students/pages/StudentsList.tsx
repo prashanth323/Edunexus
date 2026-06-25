@@ -38,6 +38,7 @@ import { Badge } from "@/components/ui/badge"
 import { flattenSectionOptionsForCurrentYear, getCurrentAcademicYearMeta } from "../api/academics.api"
 import {
   getStudents,
+  getStudentsForClassTeacher,
   getStudentsPendingPortalLogin,
   type Student,
   type StudentPendingPortalLogin,
@@ -46,7 +47,9 @@ import { AssignSectionDropdownItems } from "../components/AssignSectionDropdown"
 import { ManageClassesPanel } from "../components/ManageClassesDialog"
 import { PendingStudentLoginPanel } from "../components/PendingStudentLoginPanel"
 import { AdmissionNumberLoginPanel } from "@/features/admissions/components/AdmissionNumberLoginPanel"
+import { ClassTeacherTimetableTab } from "../components/ClassTeacherTimetableTab"
 import { useAuth } from "@/features/auth/hooks/useAuth"
+import { hasClassTeacherCapabilities } from "@/features/auth/lib/schoolRoles"
 import { inviteSchoolUsers, type SchoolInviteRow, type ParentInvitePayload } from "@/features/invites/api/invites.api"
 import { toast } from "sonner"
 import { BulkImportDialog, type CSVColumn } from "@/components/common/BulkImportDialog"
@@ -119,9 +122,11 @@ function baseStudentColumns(): ColumnDef<Student>[] {
 function StudentRowActions({
   student,
   assignProps,
+  viewOnly = false,
 }: {
   student: Student
   assignProps: { enabled: boolean; schoolId: string | undefined }
+  viewOnly?: boolean
 }) {
   const navigate = useNavigate()
   return (
@@ -134,20 +139,26 @@ function StudentRowActions({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuLabel>Actions</DropdownMenuLabel>
-        <DropdownMenuItem onClick={() => navigator.clipboard.writeText(student.id)}>
-          Copy Student ID
-        </DropdownMenuItem>
+        {!viewOnly && (
+          <DropdownMenuItem onClick={() => navigator.clipboard.writeText(student.id)}>
+            Copy Student ID
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => navigate(`/students/${student.id}`)}>
           View Profile
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => navigate(`/students/${student.id}`)}>
-          Edit Details
-        </DropdownMenuItem>
-        <DropdownMenuItem className="text-destructive" disabled>
-          Archive Student
-        </DropdownMenuItem>
-        <AssignSectionDropdownItems student={student} dropdownProps={assignProps} />
+        {!viewOnly && (
+          <>
+            <DropdownMenuItem onClick={() => navigate(`/students/${student.id}`)}>
+              Edit Details
+            </DropdownMenuItem>
+            <DropdownMenuItem className="text-destructive" disabled>
+              Archive Student
+            </DropdownMenuItem>
+            <AssignSectionDropdownItems student={student} dropdownProps={assignProps} />
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -158,9 +169,15 @@ function StudentRowActions({
 export function StudentsList() {
   const activeSchoolId = useAuth((state) => state.activeSchoolId)
   const activeRole = useAuth((state) => state.activeRole)
+  const schoolRoles = useAuth((state) => state.schoolRoles)
+  const user = useAuth((state) => state.user)
   const queryClient = useQueryClient()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const admissionNoFromUrl = searchParams.get("admissionNo") ?? ""
+  const urlTab = searchParams.get("tab")
+  const [classListTab, setClassListTab] = useState<"students" | "timetable">(
+    urlTab === "timetable" ? "timetable" : "students",
+  )
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = useState("")
@@ -191,15 +208,20 @@ export function StudentsList() {
   const [g2Primary, setG2Primary] = useState(false)
   const [linkStudentId, setLinkStudentId] = useState<string | null>(null)
 
+  const isClassTeacher = hasClassTeacherCapabilities(schoolRoles)
+  const canManageAcademics = CAN_MANAGE_ACADEMICS.has(activeRole ?? "")
+
   const { data, isLoading } = useQuery({
-    queryKey: ["students", activeSchoolId],
-    queryFn: () => getStudents(activeSchoolId!),
-    enabled: !!activeSchoolId,
+    queryKey: ["students", activeSchoolId, schoolRoles, user?.id],
+    queryFn: () =>
+      isClassTeacher && user?.id
+        ? getStudentsForClassTeacher(activeSchoolId!, user.id)
+        : getStudents(activeSchoolId!),
+    enabled: !!activeSchoolId && (!isClassTeacher || !!user?.id),
   })
 
   const students = data ?? EMPTY_STUDENTS
-
-  const canManageAcademics = CAN_MANAGE_ACADEMICS.has(activeRole ?? "")
+  const rowActionsViewOnly = isClassTeacher
 
   const { data: pendingLogins = [] } = useQuery({
     queryKey: ["students-pending-login", activeSchoolId],
@@ -221,11 +243,15 @@ export function StudentsList() {
       {
         id: "actions",
         cell: ({ row }) => (
-          <StudentRowActions student={row.original} assignProps={assignSectionProps} />
+          <StudentRowActions
+            student={row.original}
+            assignProps={assignSectionProps}
+            viewOnly={rowActionsViewOnly}
+          />
         ),
       },
     ],
-    [assignSectionProps],
+    [assignSectionProps, rowActionsViewOnly],
   )
 
   const { data: ayMetaForManage } = useQuery({
@@ -808,8 +834,14 @@ export function StudentsList() {
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Students</h1>
-          <p className="text-muted-foreground mt-1">Manage student directory, admissions, and profiles.</p>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {isClassTeacher ? "My class" : "Students"}
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            {isClassTeacher
+              ? "Students in your assigned class sections."
+              : "Manage student directory, admissions, and profiles."}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2 shrink-0 justify-end">
           {canManageAcademics ? (
@@ -823,18 +855,65 @@ export function StudentsList() {
               <GraduationCap className="h-4 w-4" /> Manage classes
             </Button>
           ) : null}
-          <Button
-            className="shrink-0 gap-2"
-            type="button"
-            disabled={isLoading}
-            onClick={openStudentInvite}
-            title={isLoading ? "Loading students…" : undefined}
-          >
-            <Plus className="h-4 w-4" /> Add student
-          </Button>
+          {canManageAcademics ? (
+            <Button
+              className="shrink-0 gap-2"
+              type="button"
+              disabled={isLoading}
+              onClick={openStudentInvite}
+              title={isLoading ? "Loading students…" : undefined}
+            >
+              <Plus className="h-4 w-4" /> Add student
+            </Button>
+          ) : null}
         </div>
       </div>
 
+      {isClassTeacher && (
+        <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+          <button
+            type="button"
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              classListTab === "students"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => {
+              setClassListTab("students")
+              setSearchParams((prev) => {
+                const next = new URLSearchParams(prev)
+                next.delete("tab")
+                return next
+              })
+            }}
+          >
+            Students
+          </button>
+          <button
+            type="button"
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              classListTab === "timetable"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => {
+              setClassListTab("timetable")
+              setSearchParams((prev) => {
+                const next = new URLSearchParams(prev)
+                next.set("tab", "timetable")
+                return next
+              })
+            }}
+          >
+            Timetable
+          </button>
+        </div>
+      )}
+
+      {isClassTeacher && classListTab === "timetable" ? (
+        <ClassTeacherTimetableTab />
+      ) : (
+        <>
       {canManageAcademics && activeSchoolId && (
         <AdmissionNumberLoginPanel
           key={admissionNoFromUrl || "lookup"}
@@ -926,6 +1005,8 @@ export function StudentsList() {
           </Button>
         </div>
       </div>
+        </>
+      )}
     </div>
   )
 }

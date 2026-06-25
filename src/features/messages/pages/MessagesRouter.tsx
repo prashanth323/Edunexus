@@ -1,16 +1,18 @@
 import { useAuth } from "@/features/auth/hooks/useAuth"
+import { hasAnyTeachingRole } from "@/features/auth/lib/schoolRoles"
 import { ParentPrincipalMessagesView } from "../components/ParentPrincipalMessagesView"
 import { TeacherPrincipalMessagesView } from "../components/TeacherPrincipalMessagesView"
 import { PrincipalMessagesView } from "../components/PrincipalMessagesView"
 
 export function MessagesRouter() {
   const activeRole = useAuth((s) => s.activeRole)
+  const schoolRoles = useAuth((s) => s.schoolRoles)
 
   if (activeRole === "parent") {
     return <ParentPrincipalMessagesView />
   }
 
-  if (activeRole === "teacher" || activeRole === "class_teacher") {
+  if (hasAnyTeachingRole(schoolRoles)) {
     return <TeacherPrincipalMessagesView />
   }
 

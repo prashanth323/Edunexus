@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Home, Loader2, BedDouble, Users, Percent } from "lucide-react"
 import { useSearchParams } from "react-router-dom"
@@ -19,6 +20,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { StatCardSkeletonGrid } from "@/components/ui/card-skeleton"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Table,
@@ -36,6 +38,10 @@ import {
   EMPTY_HOSTEL_OVERVIEW,
 } from "../api/hostel.api"
 import { HostelManageDialog } from "../components/HostelManageDialog"
+import {
+  HostelRoomEditDialog,
+  type HostelRoomEditTarget,
+} from "../components/HostelRoomEditDialog"
 import { StudentAdmissionLookupPanel } from "@/features/students/components/StudentAdmissionLookupPanel"
 import { getPendingHostelStudents } from "@/features/students/api/studentService.api"
 
@@ -46,7 +52,20 @@ export function HostelOverview() {
   const activeSchoolId = useAuth((s) => s.activeSchoolId)
   const [searchParams, setSearchParams] = useSearchParams()
   const tab = searchParams.get("tab") ?? "overview"
-  const setTab = (value: string) => setSearchParams({ tab: value }, { replace: true })
+  const admissionNoFromUrl = searchParams.get("admissionNo") ?? ""
+  const [editTarget, setEditTarget] = useState<HostelRoomEditTarget | null>(null)
+
+  const setTab = (value: string) => {
+    if (value === "allocate" && admissionNoFromUrl) {
+      setSearchParams({ tab: value, admissionNo: admissionNoFromUrl }, { replace: true })
+    } else {
+      setSearchParams({ tab: value }, { replace: true })
+    }
+  }
+
+  const openAllocateFor = (admissionNo: string) => {
+    setSearchParams({ tab: "allocate", admissionNo }, { replace: true })
+  }
 
   const { data: rooms, isLoading } = useQuery({
     queryKey: ["hostel-rooms", activeSchoolId],
@@ -133,6 +152,13 @@ export function HostelOverview() {
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
+      {activeSchoolId && (
+        <HostelRoomEditDialog
+          schoolId={activeSchoolId}
+          target={editTarget}
+          onClose={() => setEditTarget(null)}
+        />
+      )}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Hostel</h1>
@@ -171,6 +197,7 @@ export function HostelOverview() {
                       <TableHead>Name</TableHead>
                       <TableHead>Class</TableHead>
                       <TableHead>Parent phone</TableHead>
+                      <TableHead>Parent email</TableHead>
                       <TableHead />
                     </TableRow>
                   </TableHeader>
@@ -185,11 +212,12 @@ export function HostelOverview() {
                           {[row.class_name, row.section_name].filter(Boolean).join(" - ") || "—"}
                         </TableCell>
                         <TableCell>{row.parent_phone ?? "—"}</TableCell>
+                        <TableCell>{row.parent_email ?? "—"}</TableCell>
                         <TableCell>
                           <button
                             type="button"
                             className="text-sm text-primary underline"
-                            onClick={() => setTab("allocate")}
+                            onClick={() => openAllocateFor(row.admission_no)}
                           >
                             Allocate
                           </button>
@@ -205,7 +233,11 @@ export function HostelOverview() {
 
         <TabsContent value="allocate" className="mt-4">
           {activeSchoolId && (
-            <StudentAdmissionLookupPanel schoolId={activeSchoolId} mode="hostel" />
+            <StudentAdmissionLookupPanel
+              schoolId={activeSchoolId}
+              mode="hostel"
+              initialAdmissionNo={admissionNoFromUrl}
+            />
           )}
         </TabsContent>
 
@@ -373,18 +405,38 @@ export function HostelOverview() {
                   <TableHead>Admission no.</TableHead>
                   <TableHead>Room</TableHead>
                   <TableHead>Check-in</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {allocations.map((a) => {
                   const prof = a.students?.profiles
                   const room = a.hostel_rooms
+                  const roomLabel = room ? `${room.block ? `${room.block}-` : ""}${room.room_no}` : "—"
                   return (
                     <TableRow key={a.id}>
                       <TableCell>{prof?.full_name ?? "—"}</TableCell>
-                      <TableCell>{a.students?.admission_no ?? "—"}</TableCell>
-                      <TableCell>{room ? `${room.block ? `${room.block}-` : ""}${room.room_no}` : "—"}</TableCell>
+                      <TableCell className="font-mono text-sm">{a.students?.admission_no ?? "—"}</TableCell>
+                      <TableCell>{roomLabel}</TableCell>
                       <TableCell>{a.check_in_date}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8"
+                          onClick={() =>
+                            setEditTarget({
+                              allocationId: a.id,
+                              studentName: prof?.full_name ?? "Student",
+                              admissionNo: a.students?.admission_no ?? "—",
+                              currentRoomId: a.room_id,
+                              currentRoomLabel: roomLabel,
+                            })
+                          }
+                        >
+                          Edit
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   )
                 })}

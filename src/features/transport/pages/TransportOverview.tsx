@@ -1,3 +1,4 @@
+import { Fragment, useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Bus, Loader2, MapPin, Route, Users, Gauge } from "lucide-react"
 import { useSearchParams } from "react-router-dom"
@@ -19,6 +20,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { StatCardSkeletonGrid } from "@/components/ui/card-skeleton"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Table,
@@ -37,6 +39,10 @@ import {
   EMPTY_TRANSPORT_OVERVIEW,
 } from "../api/transport.api"
 import { TransportManageDialog } from "../components/TransportManageDialog"
+import {
+  TransportRouteEditDialog,
+  type TransportRouteEditTarget,
+} from "../components/TransportRouteEditDialog"
 import { StudentAdmissionLookupPanel } from "@/features/students/components/StudentAdmissionLookupPanel"
 import { getPendingTransportStudents } from "@/features/students/api/studentService.api"
 
@@ -47,7 +53,20 @@ export function TransportOverview() {
   const activeSchoolId = useAuth((s) => s.activeSchoolId)
   const [searchParams, setSearchParams] = useSearchParams()
   const tab = searchParams.get("tab") ?? "overview"
-  const setTab = (value: string) => setSearchParams({ tab: value }, { replace: true })
+  const admissionNoFromUrl = searchParams.get("admissionNo") ?? ""
+  const [editTarget, setEditTarget] = useState<TransportRouteEditTarget | null>(null)
+
+  const setTab = (value: string) => {
+    if (value === "allocate" && admissionNoFromUrl) {
+      setSearchParams({ tab: value, admissionNo: admissionNoFromUrl }, { replace: true })
+    } else {
+      setSearchParams({ tab: value }, { replace: true })
+    }
+  }
+
+  const openAllocateFor = (admissionNo: string) => {
+    setSearchParams({ tab: "allocate", admissionNo }, { replace: true })
+  }
 
   const { data: buses, isLoading: busesLoading } = useQuery({
     queryKey: ["transport-buses", activeSchoolId],
@@ -88,6 +107,19 @@ export function TransportOverview() {
   })
 
   const routeNameById = new Map(routesList.map((r) => [r.id, r.name]))
+  const busRegById = new Map((buses ?? []).map((b) => [b.id, b.registration_no]))
+
+  const studentsByRoute = useMemo(() => {
+    const map = new Map<string, typeof routeStudents>()
+    for (const rs of routeStudents) {
+      const list = map.get(rs.route_id) ?? []
+      list.push(rs)
+      map.set(rs.route_id, list)
+    }
+    return map
+  }, [routeStudents])
+
+  const [expandedRouteId, setExpandedRouteId] = useState<string | null>(null)
 
   const o = overview
 
@@ -146,6 +178,13 @@ export function TransportOverview() {
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
+      {activeSchoolId && (
+        <TransportRouteEditDialog
+          schoolId={activeSchoolId}
+          target={editTarget}
+          onClose={() => setEditTarget(null)}
+        />
+      )}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Transport</h1>
@@ -184,6 +223,7 @@ export function TransportOverview() {
                       <TableHead>Name</TableHead>
                       <TableHead>Class</TableHead>
                       <TableHead>Parent phone</TableHead>
+                      <TableHead>Parent email</TableHead>
                       <TableHead />
                     </TableRow>
                   </TableHeader>
@@ -198,11 +238,12 @@ export function TransportOverview() {
                           {[row.class_name, row.section_name].filter(Boolean).join(" - ") || "—"}
                         </TableCell>
                         <TableCell>{row.parent_phone ?? "—"}</TableCell>
+                        <TableCell>{row.parent_email ?? "—"}</TableCell>
                         <TableCell>
                           <button
                             type="button"
                             className="text-sm text-primary underline"
-                            onClick={() => setTab("allocate")}
+                            onClick={() => openAllocateFor(row.admission_no)}
                           >
                             Allocate
                           </button>
@@ -218,7 +259,11 @@ export function TransportOverview() {
 
         <TabsContent value="allocate" className="mt-4">
           {activeSchoolId && (
-            <StudentAdmissionLookupPanel schoolId={activeSchoolId} mode="transport" />
+            <StudentAdmissionLookupPanel
+              schoolId={activeSchoolId}
+              mode="transport"
+              initialAdmissionNo={admissionNoFromUrl}
+            />
           )}
         </TabsContent>
 
@@ -319,7 +364,88 @@ export function TransportOverview() {
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Route className="h-5 w-5" />
+              Route summary
+            </CardTitle>
+            <CardDescription>Route number, bus, fare, stops, and student count per route</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!routes?.length ? (
+              <p className="text-sm text-muted-foreground">No routes found.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Route no.</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Bus</TableHead>
+                    <TableHead className="text-right">Fare</TableHead>
+                    <TableHead>Stops / details</TableHead>
+                    <TableHead className="text-right">Students</TableHead>
+                    <TableHead />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {routes.map((r) => {
+                    const count = studentsByRoute.get(r.id)?.length ?? 0
+                    const busReg = r.bus_id ? busRegById.get(r.bus_id) : null
+                    return (
+                      <Fragment key={r.id}>
+                        <TableRow>
+                          <TableCell className="font-mono">{r.route_code ?? "—"}</TableCell>
+                          <TableCell className="font-medium">{r.name}</TableCell>
+                          <TableCell>{busReg ?? "—"}</TableCell>
+                          <TableCell className="text-right">
+                            ₹{(typeof r.fare === "number" ? r.fare : Number(r.fare)).toFixed(2)}
+                          </TableCell>
+                          <TableCell className="max-w-[200px] truncate text-muted-foreground text-sm">
+                            {r.description ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Badge variant="secondary">{count}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            {count > 0 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8"
+                                onClick={() =>
+                                  setExpandedRouteId((id) => (id === r.id ? null : r.id))
+                                }
+                              >
+                                {expandedRouteId === r.id ? "Hide" : "List"}
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                        {expandedRouteId === r.id && (
+                          <TableRow key={`${r.id}-students`}>
+                            <TableCell colSpan={7} className="bg-muted/30">
+                              <ul className="text-sm space-y-1 py-1">
+                                {(studentsByRoute.get(r.id) ?? []).map((rs) => (
+                                  <li key={rs.id}>
+                                    {rs.students?.profiles?.full_name ?? "—"} (
+                                    {rs.students?.admission_no ?? "—"})
+                                  </li>
+                                ))}
+                              </ul>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </Fragment>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -375,6 +501,7 @@ export function TransportOverview() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Route no.</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead className="text-right">Fare</TableHead>
                     <TableHead>Status</TableHead>
@@ -383,6 +510,7 @@ export function TransportOverview() {
                 <TableBody>
                   {routes.map((r) => (
                     <TableRow key={r.id}>
+                      <TableCell className="font-mono">{r.route_code ?? "—"}</TableCell>
                       <TableCell className="font-medium">{r.name}</TableCell>
                       <TableCell className="text-right">
                         {(typeof r.fare === "number" ? r.fare : Number(r.fare)).toFixed(2)}
@@ -399,7 +527,7 @@ export function TransportOverview() {
             )}
           </CardContent>
         </Card>
-      </div>
+        </div>
 
       <Card>
         <CardHeader>
@@ -419,16 +547,38 @@ export function TransportOverview() {
                   <TableHead>Student</TableHead>
                   <TableHead>Admission no.</TableHead>
                   <TableHead>Route</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {routeStudents.map((rs) => (
-                  <TableRow key={rs.id}>
-                    <TableCell>{rs.students?.profiles?.full_name ?? "—"}</TableCell>
-                    <TableCell>{rs.students?.admission_no ?? "—"}</TableCell>
-                    <TableCell>{routeNameById.get(rs.route_id) ?? "—"}</TableCell>
-                  </TableRow>
-                ))}
+                {routeStudents.map((rs) => {
+                  const routeName = routeNameById.get(rs.route_id) ?? "—"
+                  return (
+                    <TableRow key={rs.id}>
+                      <TableCell>{rs.students?.profiles?.full_name ?? "—"}</TableCell>
+                      <TableCell className="font-mono text-sm">{rs.students?.admission_no ?? "—"}</TableCell>
+                      <TableCell>{routeName}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8"
+                          onClick={() =>
+                            setEditTarget({
+                              routeStudentId: rs.id,
+                              studentName: rs.students?.profiles?.full_name ?? "Student",
+                              admissionNo: rs.students?.admission_no ?? "—",
+                              currentRouteId: rs.route_id,
+                              currentRouteName: routeName,
+                            })
+                          }
+                        >
+                          Edit
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           )}

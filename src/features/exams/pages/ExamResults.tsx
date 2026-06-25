@@ -19,7 +19,9 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/features/auth/hooks/useAuth"
+import { hasAnySchoolRole } from "@/features/auth/lib/schoolRoles"
 import { getExamWithDetails, getExamResults } from "../api/exams.api"
+import { getPortalStudentIds } from "@/features/students/api/portalStudents.api"
 
 const GRADE_COLORS: Record<string, string> = {
   "A+": "#22c55e",
@@ -36,11 +38,24 @@ const PIE_COLORS = ["#22c55e", "#ef4444"]
 export function ExamResults() {
   const { examId } = useParams<{ examId: string }>()
   const activeRole = useAuth((s) => s.activeRole)
+  const schoolRoles = useAuth((s) => s.schoolRoles)
+  const user = useAuth((s) => s.user)
+  const activeSchoolId = useAuth((s) => s.activeSchoolId)
 
-  const canManage = !!(
-    activeRole &&
-    new Set(["principal", "school_admin", "teacher", "class_teacher", "vice_principal"]).has(activeRole)
-  )
+  const isPortalViewer = activeRole === "parent" || activeRole === "student"
+
+  const canManage =
+    hasAnySchoolRole(schoolRoles, ["teacher", "class_teacher"]) ||
+    !!(
+      activeRole &&
+      new Set(["principal", "school_admin", "vice_principal"]).has(activeRole)
+    )
+
+  const { data: portalStudentIds = [] } = useQuery({
+    queryKey: ["portal-student-ids", user?.id, activeSchoolId, activeRole],
+    queryFn: () => getPortalStudentIds(user!.id, activeSchoolId!, activeRole!),
+    enabled: !!isPortalViewer && !!user?.id && !!activeSchoolId && !!activeRole,
+  })
 
   const { data: exam, isLoading: examLoading } = useQuery({
     queryKey: ["exam-detail", examId],
@@ -77,18 +92,23 @@ export function ExamResults() {
     )
   }
 
-  // Compute analytics
-  const sorted = [...results].sort((a, b) => b.marks_obtained - a.marks_obtained)
-  const totalStudents = results.length
-  const avgMarks = totalStudents > 0 ? results.reduce((s, r) => s + r.marks_obtained, 0) / totalStudents : 0
-  const passed = exam.passing_marks != null ? results.filter((r) => r.marks_obtained >= exam.passing_marks!).length : totalStudents
+  // Compute analytics (portal viewers only see their own / linked children's rows)
+  const portalIdSet = new Set(portalStudentIds)
+  const visibleResults = isPortalViewer
+    ? results.filter((r) => portalIdSet.has(r.student_id))
+    : results
+
+  const sorted = [...visibleResults].sort((a, b) => b.marks_obtained - a.marks_obtained)
+  const totalStudents = visibleResults.length
+  const avgMarks = totalStudents > 0 ? visibleResults.reduce((s, r) => s + r.marks_obtained, 0) / totalStudents : 0
+  const passed = exam.passing_marks != null ? visibleResults.filter((r) => r.marks_obtained >= exam.passing_marks!).length : totalStudents
   const failed = totalStudents - passed
   const passRate = totalStudents > 0 ? (passed / totalStudents) * 100 : 0
   const topScore = sorted[0]?.marks_obtained ?? 0
 
   // Grade distribution
   const gradeCounts: Record<string, number> = {}
-  results.forEach((r) => {
+  visibleResults.forEach((r) => {
     const g = r.grade || "?"
     gradeCounts[g] = (gradeCounts[g] || 0) + 1
   })
@@ -117,7 +137,9 @@ export function ExamResults() {
       <div className="flex items-center gap-3">
         <Button asChild variant="ghost" size="icon"><Link to="/exams"><ArrowLeft className="h-5 w-5" /></Link></Button>
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Results & Analytics</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+            {isPortalViewer ? "My exam result" : "Results & Analytics"}
+          </h1>
           <p className="text-muted-foreground mt-0.5">
             {exam.name}
             <Badge variant="outline" className="ml-2 text-[10px] capitalize">{exam.exam_type.replace(/_/g, " ")}</Badge>
@@ -128,17 +150,65 @@ export function ExamResults() {
       {totalStudents === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 border-2 border-dashed rounded-xl text-muted-foreground">
           <BarChart3 className="h-14 w-14 opacity-30 mb-4" />
-          <h3 className="text-lg font-semibold text-foreground">No results entered yet</h3>
+          <h3 className="text-lg font-semibold text-foreground">
+            {isPortalViewer ? "No result posted yet" : "No results entered yet"}
+          </h3>
           <p className="text-sm mt-1 mb-4">
-            {canManage
-              ? "Enter marks first to see analytics and rankings."
-              : "Marks have not been posted for this exam yet."}
+            {isPortalViewer
+              ? "Your marks for this exam have not been published yet."
+              : canManage
+                ? "Enter marks first to see analytics and rankings."
+                : "Marks have not been posted for this exam yet."}
           </p>
           {canManage && (
             <Button asChild variant="outline">
               <Link to={`/exams/${examId}/marks`}>Enter Marks</Link>
             </Button>
           )}
+        </div>
+      ) : isPortalViewer ? (
+        <div className="space-y-4">
+          {ranked.map((r) => {
+            const isPassed =
+              exam.passing_marks != null ? r.marks_obtained >= exam.passing_marks : true
+            const student = r.student
+            return (
+              <Card key={r.id}>
+                <CardHeader>
+                  <CardTitle>
+                    {student ? `${student.first_name} ${student.last_name}` : "Your result"}
+                  </CardTitle>
+                  <CardDescription>
+                    {student?.admission_no ? `Admission no. ${student.admission_no}` : exam.name}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-3 sm:grid-cols-2 text-sm">
+                  <p>
+                    <span className="text-muted-foreground">Marks: </span>
+                    <span className="font-semibold">
+                      {r.marks_obtained} / {exam.max_marks}
+                    </span>
+                  </p>
+                  <p>
+                    <span className="text-muted-foreground">Grade: </span>
+                    <Badge variant={r.grade === "F" ? "destructive" : "secondary"}>{r.grade || "—"}</Badge>
+                  </p>
+                  <p>
+                    <span className="text-muted-foreground">Status: </span>
+                    <span className={isPassed ? "text-green-600" : "text-destructive"}>
+                      {isPassed ? "Pass" : "Fail"}
+                    </span>
+                  </p>
+                  {r.remarks ? (
+                    <p className="sm:col-span-2">
+                      <span className="text-muted-foreground">Remarks: </span>
+                      {r.remarks}
+                    </p>
+                  ) : null}
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
       ) : (
         <>

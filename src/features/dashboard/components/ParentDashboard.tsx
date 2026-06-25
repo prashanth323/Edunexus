@@ -4,21 +4,16 @@ import {
   GraduationCap,
   CalendarCheck,
   CreditCard,
-  Loader2,
-  Edit2,
-  X,
+  Bus,
   BookOpen,
   ClipboardList,
   Megaphone,
   ChevronRight,
   BarChart3,
   IdCard,
+  User,
 } from "lucide-react"
 import { useState } from "react"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { z } from "zod"
-import { toast } from "sonner"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -39,48 +34,18 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form"
-import { getParentChildren, updateStudentDetails, getChildrenAttendance, getChildrenExamResults, getChildrenInvoices } from "../api/dashboard.api"
+import { getParentChildren, getChildrenAttendance, getChildrenExamResults, getChildrenInvoices } from "../api/dashboard.api"
 import { useAuth } from "@/features/auth/hooks/useAuth"
 import { useStudentDocumentsDisplayUrl } from "@/features/students/hooks/useStudentDocumentsDisplayUrl"
 import { ReportCardModal } from "./ReportCardModal"
 import { ClassTeacherCard } from "@/components/school/ClassTeacherCard"
-import { updateStudentServicePreference } from "@/features/students/api/studentService.api"
-
-const editChildSchema = z.object({
-  first_name: z.string().min(1, "First name is required"),
-  last_name: z.string().min(1, "Last name is required"),
-  gender: z.enum(["male", "female", "other", "prefer_not_to_say"]),
-  date_of_birth: z.string().nullable().optional(),
-  blood_group: z.string().nullable().optional(),
-  nationality: z.string().nullable().optional(),
-  religion: z.string().nullable().optional(),
-  category: z.string().nullable().optional(),
-  phone: z.string().nullable().optional(),
-  email: z.string().email("Invalid email").nullable().optional().or(z.literal("")),
-  address: z.object({
-    street: z.string().optional(),
-    city: z.string().optional(),
-    state: z.string().optional(),
-    zip: z.string().optional(),
-  }).optional().nullable(),
-  medical_info: z.object({
-    allergies: z.string().optional(),
-    conditions: z.string().optional(),
-    medications: z.string().optional(),
-    blood_group: z.string().optional(),
-  }).optional().nullable(),
-})
-
-type EditChildFormValues = z.infer<typeof editChildSchema>
+import { ChildServicePreferenceDialog } from "./ChildServicePreferenceDialog"
+import { getNotices } from "@/features/notices/api/notices.api"
+import { fetchDailyAttendanceForStudent } from "@/features/attendance/lib/dailyAttendanceRead"
+import { AttendanceTodayBanner } from "@/features/attendance/components/AttendanceTodayBanner"
+import { getMyWardHostelStatus } from "@/features/hostel/api/hostelStatus.api"
+import { HOSTEL_LEAVE_STATUSES } from "@/features/hostel/lib/hostelStatusLabels"
+import { format } from "date-fns"
 
 type ParentChildRow = {
   student_id: string
@@ -133,380 +98,9 @@ function LinkedChildAvatar({
   )
 }
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Label } from "@/components/ui/label"
-
-function EditChildModal({ 
-  child, 
-  onClose, 
-  onSuccess 
-}: { 
-  child: ParentChildRow, 
-  onClose: () => void, 
-  onSuccess: () => void 
-}) {
-  const [submitting, setSubmitting] = useState(false)
-  const [transportMode, setTransportMode] = useState<"self" | "school_bus" | "hostel">(
-    (child.transport_mode as "self" | "school_bus" | "hostel") ?? "self",
-  )
-  
-  const form = useForm<EditChildFormValues>({
-    resolver: zodResolver(editChildSchema),
-    defaultValues: {
-      first_name: child.first_name || "",
-      last_name: child.last_name || "",
-      gender: (child.gender as any) || "prefer_not_to_say",
-      date_of_birth: child.date_of_birth || "",
-      blood_group: child.blood_group || "",
-      nationality: child.nationality || "",
-      religion: child.religion || "",
-      category: child.category || "",
-      phone: child.phone || "",
-      email: child.email || "",
-      address: child.address || { street: "", city: "", state: "", zip: "" },
-      medical_info: child.medical_info || { allergies: "", conditions: "", medications: "" },
-    },
-  })
-
-  async function onSubmit(values: EditChildFormValues) {
-    try {
-      setSubmitting(true)
-      // Clean up empty strings for nullable fields
-      const updates: any = { ...values }
-      if (updates.email === "") updates.email = null
-      
-      await updateStudentDetails(child.student_id, updates)
-      const initialMode = (child.transport_mode as "self" | "school_bus" | "hostel") ?? "self"
-      if (transportMode !== initialMode) {
-        await updateStudentServicePreference(child.student_id, transportMode)
-      }
-      toast.success("Student details updated successfully")
-      onSuccess()
-      onClose()
-    } catch (e: any) {
-      toast.error(e.message || "Failed to update details")
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
-      <Card className="w-full max-w-2xl shadow-lg max-h-[90vh] overflow-hidden flex flex-col">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 shrink-0">
-          <div>
-            <CardTitle>Edit Child Details</CardTitle>
-            <CardDescription>Update comprehensive profile information for {child.student_name}.</CardDescription>
-          </div>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
-        </CardHeader>
-        <CardContent className="overflow-y-auto">
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <Tabs defaultValue="personal" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="personal">Personal</TabsTrigger>
-                  <TabsTrigger value="contact">Contact</TabsTrigger>
-                  <TabsTrigger value="medical">Medical</TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="personal" className="space-y-4 pt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="first_name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>First Name</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="last_name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Last Name</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="gender"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Gender</FormLabel>
-                          <select
-                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                            {...field}
-                          >
-                            <option value="male">Male</option>
-                            <option value="female">Female</option>
-                            <option value="other">Other</option>
-                            <option value="prefer_not_to_say">Prefer not to say</option>
-                          </select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="date_of_birth"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Date of Birth</FormLabel>
-                          <FormControl>
-                            <Input type="date" {...field} value={field.value || ""} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="blood_group"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Blood Group</FormLabel>
-                          <select
-                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                            {...field}
-                            value={field.value || ""}
-                          >
-                            <option value="">Select</option>
-                            <option value="A+">A+</option>
-                            <option value="A-">A-</option>
-                            <option value="B+">B+</option>
-                            <option value="B-">B-</option>
-                            <option value="AB+">AB+</option>
-                            <option value="AB-">AB-</option>
-                            <option value="O+">O+</option>
-                            <option value="O-">O-</option>
-                          </select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="nationality"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Nationality</FormLabel>
-                          <FormControl>
-                            <Input {...field} value={field.value || ""} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="religion"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Religion</FormLabel>
-                          <FormControl>
-                            <Input {...field} value={field.value || ""} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="category"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Category</FormLabel>
-                          <FormControl>
-                            <Input {...field} value={field.value || ""} placeholder="e.g. General, OBC, etc." />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="contact" className="space-y-4 pt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="phone"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Phone</FormLabel>
-                          <FormControl>
-                            <Input {...field} value={field.value || ""} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="email"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Email</FormLabel>
-                          <FormControl>
-                            <Input type="email" {...field} value={field.value || ""} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <div className="space-y-4">
-                    <Label>Address</Label>
-                    <FormField
-                      control={form.control}
-                      name="address.street"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs">Street</FormLabel>
-                          <FormControl>
-                            <Input {...field} value={field.value || ""} />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                    <div className="grid grid-cols-3 gap-2">
-                      <FormField
-                        control={form.control}
-                        name="address.city"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-xs">City</FormLabel>
-                            <FormControl>
-                              <Input {...field} value={field.value || ""} />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="address.state"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-xs">State</FormLabel>
-                            <FormControl>
-                              <Input {...field} value={field.value || ""} />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="address.zip"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-xs">ZIP</FormLabel>
-                            <FormControl>
-                              <Input {...field} value={field.value || ""} />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="medical" className="space-y-4 pt-4">
-                  <FormField
-                    control={form.control}
-                    name="medical_info.allergies"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Allergies</FormLabel>
-                        <FormControl>
-                          <Input {...field} value={field.value || ""} placeholder="List any known allergies" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="medical_info.conditions"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Medical Conditions</FormLabel>
-                        <FormControl>
-                          <Input {...field} value={field.value || ""} placeholder="List any chronic conditions" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="medical_info.medications"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Current Medications</FormLabel>
-                        <FormControl>
-                          <Input {...field} value={field.value || ""} placeholder="List any regular medications" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </TabsContent>
-              </Tabs>
-
-              <div className="space-y-2 border-t pt-4">
-                <Label>Service preferences</Label>
-                <p className="text-xs text-muted-foreground">
-                  Hostel or school bus requests appear in the VP allocation queue until assigned.
-                </p>
-                <select
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={transportMode}
-                  onChange={(e) =>
-                    setTransportMode(e.target.value as "self" | "school_bus" | "hostel")
-                  }
-                >
-                  <option value="self">Self / own transport</option>
-                  <option value="school_bus">School bus</option>
-                  <option value="hostel">Hostel</option>
-                </select>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t shrink-0">
-                <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-                <Button type="submit" disabled={submitting}>
-                  {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save All Changes
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
 export function ParentDashboard() {
   const user = useAuth((s) => s.user)
+  const activeSchoolId = useAuth((s) => s.activeSchoolId)
   const qc = useQueryClient()
   const [editingChild, setEditingChild] = useState<ParentChildRow | null>(null)
   const [selectedReportChild, setSelectedReportChild] = useState<ParentChildRow | null>(null)
@@ -535,6 +129,39 @@ export function ParentDashboard() {
   const { data: invoicesData, isLoading: isInvoicesLoading } = useQuery({
     queryKey: ["children-invoices", studentIds],
     queryFn: () => getChildrenInvoices(studentIds),
+    enabled: studentIds.length > 0,
+  })
+
+  const { data: parentNotices = [] } = useQuery({
+    queryKey: ["notices", activeSchoolId, "parent"],
+    queryFn: () => getNotices(activeSchoolId!, "parent"),
+    enabled: !!activeSchoolId,
+  })
+
+  const { data: wardHostelStatus = [] } = useQuery({
+    queryKey: ["ward-hostel-status", user?.id],
+    queryFn: () => getMyWardHostelStatus(),
+    enabled: !!user?.id,
+  })
+
+  const wardLeaveAlerts = wardHostelStatus.filter((w) =>
+    HOSTEL_LEAVE_STATUSES.has(w.resident_status),
+  )
+
+  const todayStr = new Date().toISOString().split("T")[0]
+  const { data: childrenTodayFlags = [] } = useQuery({
+    queryKey: ["parent-children-today-attendance", studentIds, todayStr],
+    queryFn: async () => {
+      const results = await Promise.all(
+        studentIds.map(async (id) => {
+          const att = await fetchDailyAttendanceForStudent(id, todayStr, todayStr)
+          return { student_id: id, row: att[0] }
+        }),
+      )
+      return results.filter(
+        (r) => r.row && ["absent", "late", "half_day"].includes(r.row.status),
+      )
+    },
     enabled: studentIds.length > 0,
   })
 
@@ -635,10 +262,12 @@ export function ParentDashboard() {
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500 max-w-7xl mx-auto pb-12">
       {editingChild && (
-        <EditChildModal 
-          child={editingChild} 
+        <ChildServicePreferenceDialog
+          child={editingChild}
           onClose={() => setEditingChild(null)}
-          onSuccess={() => qc.invalidateQueries({ queryKey: ["parent-children", user?.id] })}
+          onSuccess={async () => {
+            await qc.refetchQueries({ queryKey: ["parent-children", user?.id] })
+          }}
         />
       )}
 
@@ -665,6 +294,36 @@ export function ParentDashboard() {
           </Button>
         </div>
       </div>
+
+      {childrenTodayFlags.map(({ student_id, row }) => {
+        const childName = rows.find((c) => c.student_id === student_id)?.student_name ?? "Child"
+        if (!row) return null
+        return (
+          <div key={student_id} className="space-y-1">
+            <p className="text-sm font-medium text-muted-foreground">{childName}</p>
+            <AttendanceTodayBanner status={row.status} remarks={row.remarks} />
+          </div>
+        )
+      })}
+
+      {wardLeaveAlerts.map((ward) => (
+        <div
+          key={ward.student_id}
+          className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm"
+        >
+          <p className="font-semibold text-amber-900 dark:text-amber-100">
+            Your ward — hostel leave
+          </p>
+          <p className="text-amber-800/90 dark:text-amber-200/90 mt-1">
+            {ward.student_name} (Adm. no. {ward.admission_no}) is marked{" "}
+            <span className="font-medium">{ward.status_label.toLowerCase()}</span>
+            {ward.status_updated_at
+              ? ` as of ${format(new Date(ward.status_updated_at), "dd MMM yyyy")}`
+              : ""}
+            {ward.room_label ? ` · Room ${ward.room_label}` : ""}.
+          </p>
+        </div>
+      ))}
 
       {/* Visual Analytics Hub Cards */}
       <div className="grid gap-4 sm:grid-cols-3">
@@ -735,9 +394,10 @@ export function ParentDashboard() {
                         variant="ghost" 
                         size="icon" 
                         className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full shrink-0"
+                        title="Service preferences"
                         onClick={() => setEditingChild(child)}
                       >
-                        <Edit2 className="h-3.5 w-3.5" />
+                        <Bus className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                     <CardDescription className="truncate text-xs mt-1">
@@ -772,14 +432,46 @@ export function ParentDashboard() {
                       classTeacherEmail={child.class_teacher_email}
                     />
                   </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="w-full mt-3 gap-2 rounded-xl text-xs hover:bg-primary/5 border-primary/20 hover:border-primary/40 text-primary"
-                    onClick={() => setSelectedReportChild(child)}
-                  >
-                    <ClipboardList className="h-3.5 w-3.5" /> Download Report Card
-                  </Button>
+                  {(() => {
+                    const ward = wardHostelStatus.find((w) => w.student_id === child.student_id)
+                    if (!ward) return null
+                    const onLeave = HOSTEL_LEAVE_STATUSES.has(ward.resident_status)
+                    return (
+                      <div
+                        className={`mt-3 p-3 border rounded-xl text-xs ${
+                          onLeave ? "bg-amber-500/10 border-amber-500/30" : "bg-muted/20"
+                        }`}
+                      >
+                        <p className="font-semibold">Your ward — hostel</p>
+                        <p className="text-muted-foreground mt-1">
+                          Adm. no. {ward.admission_no} · {ward.status_label}
+                          {ward.status_updated_at
+                            ? ` · ${format(new Date(ward.status_updated_at), "dd MMM yyyy")}`
+                            : ""}
+                        </p>
+                      </div>
+                    )
+                  })()}
+                  <div className="flex flex-col gap-2 mt-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full gap-2 rounded-xl text-xs"
+                      asChild
+                    >
+                      <Link to={`/my-profile/${child.student_id}`}>
+                        <User className="h-3.5 w-3.5" /> View full profile
+                      </Link>
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full gap-2 rounded-xl text-xs hover:bg-primary/5 border-primary/20 hover:border-primary/40 text-primary"
+                      onClick={() => setSelectedReportChild(child)}
+                    >
+                      <ClipboardList className="h-3.5 w-3.5" /> Download Report Card
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -793,7 +485,8 @@ export function ParentDashboard() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {[
             { to: "/attendance", title: "Attendance Tracking", desc: "View detailed calendars", icon: CalendarCheck, color: "bg-blue-500/10 text-blue-600 border-blue-500/10 hover:bg-blue-500/[0.02]" },
-            { to: "/exams", title: "Exams & Rankings", desc: "Report cards & grades", icon: ClipboardList, color: "bg-purple-500/10 text-purple-600 border-purple-500/10 hover:bg-purple-500/[0.02]" },
+            { to: "/my-profile", title: "Student profiles", desc: "Full school records", icon: User, color: "bg-indigo-500/10 text-indigo-600 border-indigo-500/10 hover:bg-indigo-500/[0.02]" },
+            { to: "/exams", title: "Exams & results", desc: "Your class exams only", icon: ClipboardList, color: "bg-purple-500/10 text-purple-600 border-purple-500/10 hover:bg-purple-500/[0.02]" },
             { to: "/finance", title: "Fee Portal", desc: "Pay dues & save receipts", icon: CreditCard, color: "bg-emerald-500/10 text-emerald-600 border-emerald-500/10 hover:bg-emerald-500/[0.02]" },
             { to: "/lms", title: "Learning Hub", desc: "Homework assignments", icon: BookOpen, color: "bg-amber-500/10 text-amber-600 border-amber-500/10 hover:bg-amber-500/[0.02]" },
             { to: "/notices", title: "Announcements", desc: "School notice board", icon: Megaphone, color: "bg-rose-500/10 text-rose-600 border-rose-500/10 hover:bg-rose-500/[0.02]" },
@@ -978,24 +671,26 @@ export function ParentDashboard() {
           </CardHeader>
           <CardContent className="flex-1 flex flex-col justify-between pt-2">
             <div className="space-y-4">
-              <div className="flex gap-3 items-start p-3 border rounded-xl bg-card hover:shadow-sm transition-shadow">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-500/10 text-rose-500 shrink-0">
-                  <Megaphone className="h-4 w-4" />
-                </span>
-                <div>
-                  <h4 className="text-xs font-bold leading-normal">Final Term Exam Schedule Released</h4>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Please review the exam schedule and passing thresholds.</p>
-                </div>
-              </div>
-              <div className="flex gap-3 items-start p-3 border rounded-xl bg-card hover:shadow-sm transition-shadow">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 shrink-0">
-                  <CreditCard className="h-4 w-4" />
-                </span>
-                <div>
-                  <h4 className="text-xs font-bold leading-normal">Online Fee Portal Live</h4>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Parents can now view outstanding invoices and pay securely.</p>
-                </div>
-              </div>
+              {parentNotices.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  No parent notices published yet.
+                </p>
+              ) : (
+                parentNotices.slice(0, 3).map((notice) => (
+                  <div
+                    key={notice.id}
+                    className="flex gap-3 items-start p-3 border rounded-xl bg-card hover:shadow-sm transition-shadow"
+                  >
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-500/10 text-rose-500 shrink-0">
+                      <Megaphone className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-bold leading-normal truncate">{notice.title}</h4>
+                      <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{notice.body}</p>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
             <Button variant="outline" className="w-full mt-6 gap-2 shrink-0 rounded-xl" asChild>
               <Link to="/notices">

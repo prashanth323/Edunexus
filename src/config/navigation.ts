@@ -3,6 +3,7 @@
  */
 
 import type { LucideIcon } from "lucide-react"
+import { hasClassTeacherCapabilities } from "@/features/auth/lib/schoolRoles"
 import {
   LayoutDashboard,
   Users,
@@ -22,6 +23,7 @@ import {
   IdCard,
   MessagesSquare,
   ClipboardCheck,
+  User,
 } from "lucide-react"
 
 export type NavLink = {
@@ -55,6 +57,7 @@ const ADMIN_STUDENTS: readonly string[] = [
 
 const FINANCE_ROLES: readonly string[] = [
   ...PRINCIPAL_LIKE,
+  "head_accountant",
   "accountant",
   "finance_admin",
 ]
@@ -68,8 +71,10 @@ const ALL_REGISTERED_USER_ROLES: readonly string[] = [
   "student",
   "parent",
   "counselor",
+  "head_accountant",
   "accountant",
   "admission_manager",
+  "hostel_manager",
   "hr_manager",
   "librarian",
   "transport_manager",
@@ -102,7 +107,7 @@ export const SIDEBAR_LINKS: NavLink[] = [
     title: "Students",
     href: "/students",
     icon: GraduationCap,
-    roles: [...ADMIN_STUDENTS, "accountant", "receptionist"],
+    roles: [...ADMIN_STUDENTS, "class_teacher", "accountant", "receptionist"],
   },
   {
     title: "Admissions",
@@ -157,7 +162,31 @@ export const SIDEBAR_LINKS: NavLink[] = [
     title: "ERP",
     href: "/finance",
     icon: CreditCard,
-    roles: [...FINANCE_ROLES, "parent"],
+    roles: [...FINANCE_ROLES.filter((r) => r !== "head_accountant"), "parent"],
+  },
+  {
+    title: "Fee plans",
+    href: "/finance/fee-plans",
+    icon: CreditCard,
+    roles: ["head_accountant", ...PRINCIPAL_LIKE, "school_admin"],
+  },
+  {
+    title: "Fee approvals",
+    href: "/finance/fee-approvals",
+    icon: ClipboardCheck,
+    roles: ["vice_principal", "principal", "school_admin"],
+  },
+  {
+    title: "Fee structures",
+    href: "/finance/fee-structures",
+    icon: CreditCard,
+    roles: ["accountant", "head_accountant", ...PRINCIPAL_LIKE, "school_admin"],
+  },
+  {
+    title: "Fee dues & notify",
+    href: "/finance/dues",
+    icon: CreditCard,
+    roles: ["accountant", ...PRINCIPAL_LIKE, "school_admin"],
   },
   {
     title: "LMS",
@@ -178,6 +207,12 @@ export const SIDEBAR_LINKS: NavLink[] = [
     roles: ["student", "parent"],
   },
   {
+    title: "My profile",
+    href: "/my-profile",
+    icon: User,
+    roles: ["student", "parent"],
+  },
+  {
     title: "Exams",
     href: "/exams",
     icon: ClipboardList,
@@ -193,13 +228,13 @@ export const SIDEBAR_LINKS: NavLink[] = [
     title: "Transport",
     href: "/transport",
     icon: Bus,
-    roles: [...PRINCIPAL_LIKE, "transport_manager", "receptionist"],
+    roles: ["vice_principal", "transport_manager", "principal"],
   },
   {
     title: "Hostel",
     href: "/hostel",
     icon: Home,
-    roles: [...PRINCIPAL_LIKE],
+    roles: ["vice_principal", "hostel_manager", "principal"],
   },
   {
     title: "Messages",
@@ -226,6 +261,13 @@ export const SIDEBAR_LINKS: NavLink[] = [
       "parent",
       "counselor",
       "receptionist",
+      "hostel_manager",
+      "transport_manager",
+      "head_accountant",
+      "accountant",
+      "librarian",
+      "hr_manager",
+      "admission_manager",
     ],
   },
   {
@@ -241,6 +283,38 @@ export function navLinksForRole(activeRole: string | null): NavLink[] {
   return SIDEBAR_LINKS.filter((link) => link.roles.includes(activeRole))
 }
 
+/** Union of nav links visible when the user holds any of the given school roles. */
+export function navLinksForRoles(
+  schoolRoles: readonly string[],
+  platformRole?: string | null,
+  activeRole?: string | null,
+): NavLink[] {
+  const effective = platformRole ? [platformRole] : [...schoolRoles]
+  if (!effective.length) return []
+  const links = SIDEBAR_LINKS.filter((link) => effective.some((r) => link.roles.includes(r)))
+  return links.map((link) => {
+    if (
+      link.href === "/students" &&
+      activeRole === "class_teacher" &&
+      hasClassTeacherCapabilities(schoolRoles)
+    ) {
+      return { ...link, title: "My class" }
+    }
+    return link
+  })
+}
+
+export function pathAllowedForRoles(
+  allowed: readonly string[] | null,
+  schoolRoles: readonly string[],
+  platformRole?: string | null,
+): boolean {
+  if (!allowed) return true
+  const effective = platformRole ? [platformRole] : schoolRoles
+  if (!effective.length) return false
+  return effective.some((r) => allowed.includes(r))
+}
+
 const SUPER_ADMIN_ONLY_PATH_PREFIXES = ["/insights", "/announcements"] as const
 const ROLES_SUPER_ADMIN_ONLY = ["super_admin"] as const satisfies readonly string[]
 
@@ -253,7 +327,7 @@ export function getRolesAllowedForPath(pathname: string): readonly string[] | nu
   }
 
   if (/\/staff\/[^/]+\/edit/.test(normalized)) {
-    return ["principal", "vice_principal", "hr_manager"]
+    return ["principal", "vice_principal", "school_admin", "hr_manager"]
   }
 
   for (const prefix of SUPER_ADMIN_ONLY_PATH_PREFIXES) {
@@ -262,8 +336,25 @@ export function getRolesAllowedForPath(pathname: string): readonly string[] | nu
     }
   }
 
-  const link = SIDEBAR_LINKS.find(
-    (l) => l.href === normalized || (l.href !== "/" && normalized.startsWith(l.href)),
+  if (normalized === "/finance/fee-approvals" || normalized.startsWith("/finance/fee-approvals/")) {
+    return ["principal", "vice_principal", "school_admin"]
+  }
+
+  if (normalized === "/finance/fee-structures" || normalized.startsWith("/finance/fee-structures/")) {
+    return ["principal", "vice_principal", "operations_admin", "school_admin", "head_accountant", "accountant"]
+  }
+
+  if (normalized === "/finance/pending-dues" || normalized.startsWith("/finance/pending-dues/")) {
+    return ["principal", "vice_principal", "operations_admin", "school_admin", "accountant", "finance_admin"]
+  }
+
+  const matches = SIDEBAR_LINKS.filter(
+    (l) => l.href === normalized || (l.href !== "/" && normalized.startsWith(`${l.href}/`)),
   )
+  if (matches.length === 0) {
+    const exact = SIDEBAR_LINKS.find((l) => l.href === normalized)
+    return exact?.roles ?? null
+  }
+  const link = matches.sort((a, b) => b.href.length - a.href.length)[0]
   return link?.roles ?? null
 }

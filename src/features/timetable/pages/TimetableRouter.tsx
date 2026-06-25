@@ -1,15 +1,16 @@
 import { useAuth } from "@/features/auth/hooks/useAuth"
+import { hasAnyTeachingRole } from "@/features/auth/lib/schoolRoles"
 import { PrincipalTimetablePage } from "./PrincipalTimetablePage"
 import { TeacherTimetablePage } from "./TeacherTimetablePage"
 import { StudentTimetablePage } from "./StudentTimetablePage"
 
 export function TimetableRouter() {
-  const { activeRole } = useAuth()
+  const { activeRole, schoolRoles } = useAuth()
 
   if (activeRole === "principal" || activeRole === "vice_principal" || activeRole === "school_admin") {
     return <PrincipalTimetablePage />
   }
-  if (activeRole === "teacher" || activeRole === "class_teacher") {
+  if (hasAnyTeachingRole(schoolRoles)) {
     return <TeacherTimetablePage />
   }
   if (activeRole === "student") {

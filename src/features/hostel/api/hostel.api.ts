@@ -82,29 +82,72 @@ export type HostelRoomRow = {
   type: string
   capacity: number
   monthly_fee: number
+  amenities?: string[] | null
   is_active: boolean
+  approval_status?: string
+  rejection_notes?: string | null
 }
 
-export async function getHostelRooms(schoolId: string) {
-  const { data, error } = await supabase
+export async function getHostelRooms(schoolId: string, opts?: { approvedOnly?: boolean; managerView?: boolean }) {
+  let q = supabase
     .from("hostel_rooms")
-    .select("id, school_id, room_no, block, floor, type, capacity, monthly_fee, is_active")
+    .select("id, school_id, room_no, block, floor, type, capacity, monthly_fee, amenities, is_active, approval_status, rejection_notes")
     .eq("school_id", schoolId)
     .order("block", { ascending: true })
     .order("room_no", { ascending: true })
 
+  if (opts?.approvedOnly) {
+    q = q.in("approval_status", ["legacy", "approved"]).eq("is_active", true)
+  } else if (!opts?.managerView) {
+    q = q.in("approval_status", ["legacy", "approved"])
+  }
+
+  const { data, error } = await q
   if (error) throw error
   return (data ?? []) as HostelRoomRow[]
 }
 
-export async function createHostelRoom(schoolId: string, input: Omit<HostelRoomRow, "id" | "school_id">) {
+export async function getPendingHostelRooms(schoolId: string) {
   const { data, error } = await supabase
     .from("hostel_rooms")
-    .insert({ school_id: schoolId, ...input })
+    .select("id, school_id, room_no, block, floor, type, capacity, monthly_fee, amenities, is_active, approval_status, submitted_at")
+    .eq("school_id", schoolId)
+    .eq("approval_status", "pending_vp")
+    .order("submitted_at", { ascending: false })
+  if (error) throw error
+  return (data ?? []) as HostelRoomRow[]
+}
+
+export async function createHostelRoom(
+  schoolId: string,
+  input: Omit<HostelRoomRow, "id" | "school_id" | "approval_status" | "rejection_notes">,
+) {
+  const { data, error } = await supabase
+    .from("hostel_rooms")
+    .insert({
+      school_id: schoolId,
+      ...input,
+      is_active: false,
+      approval_status: "draft",
+    })
     .select()
     .single()
   if (error) throw error
   return data
+}
+
+export async function submitHostelRoomForApproval(roomId: string) {
+  const { error } = await supabase.rpc("submit_hostel_room_for_approval", { p_room_id: roomId })
+  if (error) throw error
+}
+
+export async function reviewHostelRoom(roomId: string, approve: boolean, notes?: string) {
+  const { error } = await supabase.rpc("review_hostel_room", {
+    p_room_id: roomId,
+    p_approve: approve,
+    p_notes: notes ?? null,
+  })
+  if (error) throw error
 }
 
 export type HostelAllocationRow = {

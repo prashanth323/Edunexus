@@ -1,6 +1,12 @@
 import { supabase } from "@/lib/supabase"
 import { fetchMonthlyCollectionChartSeries } from "@/lib/monthly-collection-chart"
 
+function formatSupabaseError(error: unknown): string {
+  if (!error || typeof error !== "object") return "Failed to save changes"
+  const e = error as { message?: string; details?: string; hint?: string; code?: string }
+  return [e.message, e.details, e.hint].filter(Boolean).join(" — ") || "Failed to save changes"
+}
+
 export async function getPrincipalDashboard(schoolId: string) {
   const { data, error } = await supabase
     .from('v_principal_dashboard')
@@ -25,6 +31,42 @@ export async function getTeacherDashboard(profileId: string, schoolId: string) {
 
   if (error) throw error
   return data
+}
+
+export type HomeroomSection = {
+  section_id: string
+  section_name: string
+  class_name: string
+}
+
+export async function getHomeroomSections(profileId: string, schoolId: string): Promise<HomeroomSection[]> {
+  const { data: staff, error: staffError } = await supabase
+    .from("staff")
+    .select("id")
+    .eq("profile_id", profileId)
+    .eq("school_id", schoolId)
+    .is("deleted_at", null)
+    .maybeSingle()
+
+  if (staffError) throw staffError
+  if (!staff?.id) return []
+
+  const { data, error } = await supabase
+    .from("sections")
+    .select("id, name, classes ( name )")
+    .eq("class_teacher_id", staff.id)
+
+  if (error) throw error
+
+  return (data ?? []).map((row) => {
+    const cl = row.classes
+    const classRow = Array.isArray(cl) ? cl[0] : cl
+    return {
+      section_id: String(row.id),
+      section_name: String(row.name ?? ""),
+      class_name: classRow?.name ? String(classRow.name) : "Class",
+    }
+  })
 }
 
 export async function getParentChildren(profileId: string) {
@@ -222,14 +264,12 @@ export type StudentUpdates = {
 }
 
 export async function updateStudentDetails(studentId: string, updates: StudentUpdates) {
-  const { data, error } = await supabase
-    .from('students')
-    .update(updates)
-    .eq('id', studentId)
-    .select()
-    .single()
+  const { data, error } = await supabase.rpc("update_linked_student_details", {
+    p_student_id: studentId,
+    p_updates: updates,
+  })
 
-  if (error) throw error
+  if (error) throw new Error(formatSupabaseError(error))
   return data
 }
 

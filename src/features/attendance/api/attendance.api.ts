@@ -123,14 +123,14 @@ export async function getDailyAttendanceForSectionDate(
 ) {
   const { data, error } = await supabase
     .from("attendance")
-    .select("student_id, status")
+    .select("student_id, status, remarks")
     .eq("school_id", schoolId)
     .eq("section_id", sectionId)
     .eq("date", date)
     .is("subject_id", null)
 
   if (error) throw error
-  return data as { student_id: string; status: string }[]
+  return data as { student_id: string; status: string; remarks: string | null }[]
 }
 
 export async function upsertDailyAttendanceBatch(rows: AttendanceUpsertRow[]) {
@@ -292,4 +292,32 @@ export async function getPrincipalAttendanceStats(
     /* function not deployed or network */
   }
   return { ...EMPTY_PRINCIPAL_ATTENDANCE_STATS, period_days: periodDays }
+}
+
+export type SectionAttendanceSnapshotRow = {
+  section_id: string
+  class_name: string
+  section_name: string
+  student_id: string
+  roll_no: string | null
+  student_name: string
+  status: string | null
+  remarks: string | null
+  marked_by_role: string | null
+}
+
+export async function getSectionAttendanceSnapshot(
+  schoolId: string,
+  date: string,
+): Promise<SectionAttendanceSnapshotRow[]> {
+  const { data, error } = await supabase.rpc("get_section_attendance_snapshot", {
+    p_school_id: schoolId,
+    p_date: date,
+  })
+  if (error) throw error
+  return (data ?? []) as SectionAttendanceSnapshotRow[]
+}
+
+export async function upsertReceptionistAttendance(row: AttendanceUpsertRow) {
+  await upsertDailyAttendanceBatch([row])
 }

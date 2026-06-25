@@ -33,6 +33,7 @@ import {
   getPrincipalAttendanceStats,
   type PrincipalAttendanceStats,
 } from "../api/attendance.api"
+import { VpClassAttendancePanel } from "../components/VpClassAttendancePanel"
 
 const AREA_STROKE = "hsl(var(--primary) / 0.9)"
 const BAR_FILL = "hsl(var(--primary) / 0.85)"
@@ -345,6 +346,8 @@ export function AttendancePrincipalOverview() {
           )}
         </CardContent>
       </Card>
+
+      <VpClassAttendancePanel />
     </div>
   )
 }

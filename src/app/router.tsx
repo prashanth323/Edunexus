@@ -7,12 +7,16 @@ import { CompleteProfilePage } from "@/features/auth/pages/CompleteProfilePage"
 import { DashboardRouter } from "@/features/dashboard/DashboardRouter"
 import { StudentsList } from "@/features/students/pages/StudentsList"
 import { StudentProfile } from "@/features/students/pages/StudentProfile"
+import { MyStudentProfile } from "@/features/students/pages/MyStudentProfile"
 import { StudentIdCardPage } from "@/features/students/pages/StudentIdCardPage"
 import { ExamManagement } from "@/features/exams/pages/ExamManagement"
 import { MarksEntry } from "@/features/exams/pages/MarksEntry"
 import { ExamResults } from "@/features/exams/pages/ExamResults"
 import { FeeStructureManager } from "@/features/finance/pages/FeeStructureManager"
 import { PendingDuesReport } from "@/features/finance/pages/PendingDuesReport"
+import { ClassFeePlanEditor } from "@/features/finance/pages/ClassFeePlanEditor"
+import { FeePlanApprovals } from "@/features/finance/pages/FeePlanApprovals"
+import { FeeDuesWorkspace } from "@/features/finance/pages/FeeDuesWorkspace"
 import { AttendanceMarking } from "@/features/attendance/pages/AttendanceMarking"
 import { FinanceRouter } from "@/features/finance/pages/FinanceRouter"
 import { CrmPipeline } from "@/features/crm/pages/CrmPipeline"
@@ -27,8 +31,8 @@ import { StaffDirectory } from "@/features/staff/pages/StaffDirectory"
 import { StaffProfileEdit } from "@/features/staff/pages/StaffProfileEdit"
 import { VpClassesOverview } from "@/features/classes/pages/VpClassesOverview"
 import { NoticesBoard } from "@/features/notices/pages/NoticesBoard"
-import { TransportOverview } from "@/features/transport/pages/TransportOverview"
-import { HostelOverview } from "@/features/hostel/pages/HostelOverview"
+import { TransportRouter } from "@/features/transport/pages/TransportRouter"
+import { HostelRouter } from "@/features/hostel/pages/HostelRouter"
 import { SettingsPage } from "@/features/settings/pages/SettingsPage"
 import { PlatformInsightsList } from "@/features/dashboard/pages/PlatformInsightsList"
 import { SchoolInsightsDetail } from "@/features/dashboard/pages/SchoolInsightsDetail"
@@ -76,6 +80,22 @@ export const router = createBrowserRouter([
             element: (
               <RequireRole>
                 <StudentProfile />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "my-profile",
+            element: (
+              <RequireRole>
+                <MyStudentProfile />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "my-profile/:studentId",
+            element: (
+              <RequireRole>
+                <MyStudentProfile />
               </RequireRole>
             ),
           },
@@ -140,6 +160,30 @@ export const router = createBrowserRouter([
             element: (
               <RequireRole>
                 <PendingDuesReport />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "finance/fee-plans",
+            element: (
+              <RequireRole>
+                <ClassFeePlanEditor />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "finance/fee-approvals",
+            element: (
+              <RequireRole>
+                <FeePlanApprovals />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "finance/dues",
+            element: (
+              <RequireRole>
+                <FeeDuesWorkspace />
               </RequireRole>
             ),
           },
@@ -245,7 +289,7 @@ export const router = createBrowserRouter([
             path: "transport",
             element: (
               <RequireRole>
-                <TransportOverview />
+                <TransportRouter />
               </RequireRole>
             ),
           },
@@ -253,7 +297,7 @@ export const router = createBrowserRouter([
             path: "hostel",
             element: (
               <RequireRole>
-                <HostelOverview />
+                <HostelRouter />
               </RequireRole>
             ),
           },

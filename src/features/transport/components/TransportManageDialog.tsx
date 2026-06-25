@@ -27,15 +27,13 @@ export function TransportManageDialog() {
   const [routeName, setRouteName] = useState("")
   const [fare, setFare] = useState("")
 
-  const canWrite = activeRole === "vice_principal" || activeRole === "transport_manager" || activeRole === "principal"
+  const canWrite = activeRole === "transport_manager"
 
   const busMutation = useMutation({
     mutationFn: () =>
       createBus(activeSchoolId!, {
         registration_no: regNo,
-        make_model: null,
         capacity: Number(capacity),
-        is_active: true,
       }),
     onSuccess: () => {
       toast.success("Bus added")

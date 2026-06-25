@@ -27,6 +27,7 @@ import {
   type Application,
   type FeeBreakdownLine,
 } from "../api/admissions.api"
+import { AdmissionsFeeCatalog } from "../components/AdmissionsFeeCatalog"
 import { AdmissionNumberLoginPanel } from "../components/AdmissionNumberLoginPanel"
 import { AdmissionReviewDialog } from "../components/AdmissionReviewDialog"
 import { ApplicationVerificationDetails } from "../components/ApplicationVerificationDetails"
@@ -125,8 +126,17 @@ export function AdmissionsWorkspace() {
 
   const canApprove = activeRole === "principal" || activeRole === "vice_principal"
   const canCreate =
-    activeRole === "receptionist" || activeRole === "principal" || activeRole === "vice_principal"
+    activeRole === "receptionist" ||
+    activeRole === "admission_manager" ||
+    activeRole === "principal" ||
+    activeRole === "vice_principal"
+  const canViewFeeCatalog =
+    activeRole === "admission_manager" ||
+    activeRole === "counselor" ||
+    activeRole === "receptionist" ||
+    canApprove
   const isReception = activeRole === "receptionist"
+  const isAdmissionManager = activeRole === "admission_manager"
 
   const [activeTab, setActiveTab] = useState("queue")
   const [reviewApp, setReviewApp] = useState<Application | null>(null)
@@ -383,6 +393,7 @@ export function AdmissionsWorkspace() {
             <TabsTrigger value="approvals">Approvals ({pendingApps.length})</TabsTrigger>
           )}
           <TabsTrigger value="approved">Approved ({approvedApps.length})</TabsTrigger>
+          {canViewFeeCatalog && <TabsTrigger value="fee-guide">Fee catalog</TabsTrigger>}
           {canCreate && <TabsTrigger value="new">New application</TabsTrigger>}
         </TabsList>
 
@@ -400,7 +411,7 @@ export function AdmissionsWorkspace() {
               <ApplicationCard
                 key={app.id}
                 app={app}
-                canSubmit={isReception || canCreate}
+                canSubmit={isReception || isAdmissionManager || canCreate}
                 onSubmit={() => statusMutation.mutate(app.id)}
                 onUpload={handleUpload}
               />
@@ -491,6 +502,12 @@ export function AdmissionsWorkspace() {
             })
           )}
         </TabsContent>
+
+        {canViewFeeCatalog && (
+          <TabsContent value="fee-guide" className="mt-4">
+            <AdmissionsFeeCatalog />
+          </TabsContent>
+        )}
 
         {canCreate && (
           <TabsContent value="new" className="mt-4">

@@ -17,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/features/auth/hooks/useAuth"
-import { getStaffMembers, type StaffMember } from "../api/staff.api"
+import { getStaffMembers, teachingRoleBadges, type StaffMember } from "../api/staff.api"
 import { StaffMemberDetailModal } from "../components/StaffMemberDetailModal"
 import { inviteSchoolUsers } from "@/features/invites/api/invites.api"
 import { PRINCIPAL_INVITE_STAFF_ROLES, formatSchoolRoleLabel } from "@/config/school-roles"
@@ -44,6 +44,7 @@ export function StaffDirectory() {
   const canEditStaff =
     activeRole === "vice_principal" ||
     activeRole === "principal" ||
+    activeRole === "school_admin" ||
     activeRole === "hr_manager"
 
   const { data: staff = [], isLoading } = useQuery({
@@ -333,6 +334,20 @@ export function StaffDirectory() {
                 <p className="text-sm text-muted-foreground capitalize">
                   {member.designation || member.role.replace("_", " ")}
                 </p>
+                {teachingRoleBadges(member.role).length > 0 && (
+                  <div className="flex flex-wrap justify-center gap-1 mt-2">
+                    {teachingRoleBadges(member.role).map((badge) => (
+                      <Badge key={badge} variant="outline" className="text-xs">
+                        {badge === "Subject" ? "Subject teacher" : "Class teacher"}
+                      </Badge>
+                    ))}
+                    {teachingRoleBadges(member.role).length === 2 && (
+                      <Badge variant="secondary" className="text-xs">
+                        Both
+                      </Badge>
+                    )}
+                  </div>
+                )}
                 <div className="mt-2">
                   <Badge
                     variant="secondary"

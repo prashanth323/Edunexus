@@ -12,8 +12,8 @@ import {
   getStudentServiceByAdmissionNo,
   type StudentServiceLookup,
 } from "@/features/students/api/studentService.api"
-import { assignHostelRoom, getHostelRooms } from "@/features/hostel/api/hostel.api"
-import { assignStudentToRoute, getRoutes } from "@/features/transport/api/transport.api"
+import { assignHostelRoom, changeHostelRoom, getHostelRooms } from "@/features/hostel/api/hostel.api"
+import { assignStudentToRoute, changeStudentRoute, getRoutes } from "@/features/transport/api/transport.api"
 import { supabase } from "@/lib/supabase"
 
 type Props = {
@@ -52,15 +52,29 @@ export function StudentAdmissionLookupPanel({
     retry: false,
   })
 
+  useEffect(() => {
+    if (!student) {
+      setRoomId("")
+      setRouteId("")
+      return
+    }
+    if (mode === "hostel" && student.hostel_room_id) {
+      setRoomId(student.hostel_room_id)
+    }
+    if (mode === "transport" && student.route_id) {
+      setRouteId(student.route_id)
+    }
+  }, [student, mode])
+
   const { data: rooms = [] } = useQuery({
     queryKey: ["hostel-rooms-lookup", schoolId],
-    queryFn: () => getHostelRooms(schoolId),
+    queryFn: () => getHostelRooms(schoolId, { approvedOnly: true }),
     enabled: mode === "hostel" && !!student,
   })
 
   const { data: routes = [] } = useQuery({
     queryKey: ["routes-lookup", schoolId],
-    queryFn: () => getRoutes(schoolId),
+    queryFn: () => getRoutes(schoolId, { approvedOnly: true }),
     enabled: mode === "transport" && !!student,
   })
 
@@ -76,25 +90,48 @@ export function StudentAdmissionLookupPanel({
 
       if (mode === "hostel") {
         if (!roomId) throw new Error("Select a hostel room")
-        await assignHostelRoom({
-          schoolId,
-          studentId: row.id,
-          roomId,
-          academicYearId: ay.id,
-        })
+        if (row.has_hostel_allocation && row.hostel_allocation_id) {
+          if (row.hostel_room_id !== roomId) {
+            await changeHostelRoom(row.hostel_allocation_id, roomId)
+          }
+        } else {
+          await assignHostelRoom({
+            schoolId,
+            studentId: row.id,
+            roomId,
+            academicYearId: ay.id,
+          })
+        }
       } else {
         if (!routeId) throw new Error("Select a transport route")
-        await assignStudentToRoute({
-          schoolId,
-          studentId: row.id,
-          routeId,
-          academicYearId: ay.id,
-        })
+        if (row.has_route_assignment && row.route_student_id) {
+          if (row.route_id !== routeId) {
+            await changeStudentRoute(row.route_student_id, routeId)
+          }
+        } else {
+          await assignStudentToRoute({
+            schoolId,
+            studentId: row.id,
+            routeId,
+            academicYearId: ay.id,
+          })
+        }
       }
     },
-    onSuccess: () => {
-      toast.success(mode === "hostel" ? "Hostel room assigned" : "Transport route assigned")
+    onSuccess: (_, row) => {
+      const isUpdate =
+        mode === "hostel" ? row.has_hostel_allocation : row.has_route_assignment
+      toast.success(
+        mode === "hostel"
+          ? isUpdate
+            ? "Hostel room updated"
+            : "Hostel room assigned"
+          : isUpdate
+            ? "Transport route updated"
+            : "Transport route assigned",
+      )
       qc.invalidateQueries({ queryKey: ["student-service-lookup"] })
+      qc.invalidateQueries({ queryKey: ["student-service-details"] })
       qc.invalidateQueries({ queryKey: ["hostel-allocations"] })
       qc.invalidateQueries({ queryKey: ["route-students"] })
       qc.invalidateQueries({ queryKey: ["pending-hostel"] })
@@ -230,7 +267,13 @@ export function StudentAdmissionLookupPanel({
               onClick={() => allocateMutation.mutate(student)}
             >
               {allocateMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
-              {mode === "hostel" ? "Assign hostel room" : "Assign transport route"}
+              {mode === "hostel"
+                ? student.has_hostel_allocation
+                  ? "Update hostel room"
+                  : "Assign hostel room"
+                : student.has_route_assignment
+                  ? "Update transport route"
+                  : "Assign transport route"}
             </Button>
           </div>
         )}

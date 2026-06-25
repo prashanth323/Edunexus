@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useParams, Link } from "react-router-dom"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
@@ -18,6 +18,9 @@ import {
   Save,
   User,
   Users,
+  Bus,
+  Home,
+  ExternalLink,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -34,6 +37,8 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { useStudentDocumentsDisplayUrl } from "@/features/students/hooks/useStudentDocumentsDisplayUrl"
 import { useAuth } from "@/features/auth/hooks/useAuth"
 import { invalidateAfterStudentPortraitChange } from "@/lib/invalidateProfilePortraits"
 import {
@@ -49,11 +54,17 @@ import { TransferSectionDialog } from "../components/TransferSectionDialog"
 import { IdCardGenerator } from "../components/IdCardGenerator"
 import { buildStudentIdCardData } from "../lib/studentIdCardData"
 import { ClassTeacherCard } from "@/components/school/ClassTeacherCard"
+import { StudentHostelStatusPanel } from "@/features/hostel/components/StudentHostelStatusPanel"
+import { StudentPortalCredentialsPanel } from "@/features/students/components/StudentPortalCredentialsPanel"
+import { canViewPortalCredentials } from "@/features/students/api/portalCredentials.api"
 import {
   getStudentClassTeacher,
-  updateStudentServicePreference,
+  canEditStudentDetails,
+  getStudentServiceDetails,
 } from "../api/studentService.api"
-import { Label } from "@/components/ui/label"
+
+const HOSTEL_ACCESS = new Set(["vice_principal"])
+const TRANSPORT_ACCESS = new Set(["vice_principal"])
 
 const editSchema = z.object({
   first_name: z.string().min(1),
@@ -66,15 +77,40 @@ const editSchema = z.object({
   category: z.string().nullable(),
   phone: z.string().nullable(),
   email: z.string().email().nullable().or(z.literal("")),
+  address_street: z.string().nullable(),
+  address_city: z.string().nullable(),
+  address_state: z.string().nullable(),
+  address_zip: z.string().nullable(),
 })
 
 type EditValues = z.infer<typeof editSchema>
 
-const CAN_EDIT = new Set(["principal", "school_admin", "admission_manager", "vice_principal"])
-const CAN_EDIT_SERVICE = new Set(["principal", "vice_principal", "school_admin", "admission_manager"])
+const CAN_MANAGE_ACADEMICS = new Set(["principal", "school_admin", "vice_principal", "accountant"])
 
-export function StudentProfile() {
-  const { studentId } = useParams<{ studentId: string }>()
+type StudentProfileProps = {
+  portalMode?: boolean
+  studentIdOverride?: string | null
+}
+
+function PortalPhoto({ photoUrl, name }: { photoUrl: string | null | undefined; name: string }) {
+  const displayUrl = useStudentDocumentsDisplayUrl(photoUrl)
+  const initials = name
+    .split(" ")
+    .map((p) => p[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase()
+  return (
+    <Avatar className="h-24 w-24 border-2 border-background shadow-md">
+      {displayUrl ? <AvatarImage src={displayUrl} alt={name} /> : null}
+      <AvatarFallback>{initials || "?"}</AvatarFallback>
+    </Avatar>
+  )
+}
+
+export function StudentProfile({ portalMode = false, studentIdOverride }: StudentProfileProps = {}) {
+  const { studentId: routeStudentId } = useParams<{ studentId: string }>()
+  const effectiveStudentId = studentIdOverride ?? routeStudentId
   const activeRole = useAuth((s) => s.activeRole)
   const qc = useQueryClient()
 
@@ -82,13 +118,11 @@ export function StudentProfile() {
   const [saving, setSaving] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
   const [generatingRoll, setGeneratingRoll] = useState(false)
-  const [transportMode, setTransportMode] = useState<"self" | "school_bus" | "hostel">("self")
-  const [savingService, setSavingService] = useState(false)
 
   const { data: student, isLoading } = useQuery({
-    queryKey: ["student-profile", studentId],
-    queryFn: () => getStudentProfile(studentId!),
-    enabled: !!studentId,
+    queryKey: ["student-profile", effectiveStudentId],
+    queryFn: () => getStudentProfile(effectiveStudentId!),
+    enabled: !!effectiveStudentId,
   })
 
   const { data: schoolDisplayName } = useQuery({
@@ -98,20 +132,44 @@ export function StudentProfile() {
   })
 
   const { data: classTeacher } = useQuery({
-    queryKey: ["student-class-teacher", studentId],
-    queryFn: () => getStudentClassTeacher(studentId!),
-    enabled: !!studentId,
+    queryKey: ["student-class-teacher", effectiveStudentId],
+    queryFn: () => getStudentClassTeacher(effectiveStudentId!),
+    enabled: !!effectiveStudentId,
   })
 
-  const canEdit = CAN_EDIT.has(activeRole ?? "")
-  const canEditService = CAN_EDIT_SERVICE.has(activeRole ?? "")
+  const { data: editAccess } = useQuery({
+    queryKey: ["can-edit-student", effectiveStudentId],
+    queryFn: () => canEditStudentDetails(effectiveStudentId!),
+    enabled: !!effectiveStudentId && !portalMode,
+  })
 
-  useEffect(() => {
-    const mode = (student as { transport_mode?: string } | undefined)?.transport_mode
-    if (mode === "self" || mode === "school_bus" || mode === "hostel") {
-      setTransportMode(mode)
+  const { data: serviceDetails } = useQuery({
+    queryKey: ["student-service-details", effectiveStudentId],
+    queryFn: () => getStudentServiceDetails(effectiveStudentId!),
+    enabled: !!effectiveStudentId,
+  })
+
+  const canEdit = !portalMode && (editAccess?.allowed ?? false)
+  const canManageAcademics = CAN_MANAGE_ACADEMICS.has(activeRole ?? "")
+  const showPortalCredentials = !portalMode && canViewPortalCredentials(activeRole)
+  const canManageHostel = HOSTEL_ACCESS.has(activeRole ?? "")
+  const canManageTransport = TRANSPORT_ACCESS.has(activeRole ?? "")
+
+  function hostelStatusLabel() {
+    if (!serviceDetails || serviceDetails.transport_mode !== "hostel") return "—"
+    if (serviceDetails.has_hostel_allocation && serviceDetails.hostel_room) {
+      return serviceDetails.hostel_room
     }
-  }, [student])
+    return "Pending allocation"
+  }
+
+  function transportStatusLabel() {
+    if (!serviceDetails || serviceDetails.transport_mode !== "school_bus") return "—"
+    if (serviceDetails.has_route_assignment && serviceDetails.route_name) {
+      return serviceDetails.route_name
+    }
+    return "Pending allocation"
+  }
 
   const form = useForm<EditValues>({
     resolver: zodResolver(editSchema),
@@ -126,11 +184,16 @@ export function StudentProfile() {
       category: null,
       phone: null,
       email: null,
+      address_street: null,
+      address_city: null,
+      address_state: null,
+      address_zip: null,
     },
   })
 
   function startEditing() {
     if (!student) return
+    const addr = student.address ?? {}
     form.reset({
       first_name: student.first_name,
       last_name: student.last_name,
@@ -142,6 +205,10 @@ export function StudentProfile() {
       category: student.category,
       phone: student.phone,
       email: student.email,
+      address_street: addr.street ?? null,
+      address_city: addr.city ?? null,
+      address_state: addr.state ?? null,
+      address_zip: addr.zip ?? null,
     })
     setEditing(true)
   }
@@ -150,11 +217,24 @@ export function StudentProfile() {
     if (!student) return
     setSaving(true)
     try {
-      const updates: Record<string, unknown> = { ...values }
+      const {
+        address_street,
+        address_city,
+        address_state,
+        address_zip,
+        ...rest
+      } = values
+      const updates: Record<string, unknown> = { ...rest }
       if (updates.email === "") updates.email = null
+      updates.address = {
+        street: address_street?.trim() || "",
+        city: address_city?.trim() || "",
+        state: address_state?.trim() || "",
+        zip: address_zip?.trim() || "",
+      }
       await updateStudentProfile(student.id, updates)
       toast.success("Student details updated")
-      qc.invalidateQueries({ queryKey: ["student-profile", studentId] })
+      qc.invalidateQueries({ queryKey: ["student-profile", effectiveStudentId] })
       setEditing(false)
     } catch (err: any) {
       toast.error(err.message || "Update failed")
@@ -170,7 +250,7 @@ export function StudentProfile() {
       const rollNo = await generateRollNumber(student.enrollment.section_id)
       await assignRollNumber(student.enrollment.id, rollNo)
       toast.success(`Roll number assigned: ${rollNo}`)
-      qc.invalidateQueries({ queryKey: ["student-profile", studentId] })
+      qc.invalidateQueries({ queryKey: ["student-profile", effectiveStudentId] })
     } catch (err: any) {
       toast.error(err.message || "Failed to generate roll number")
     } finally {
@@ -200,7 +280,7 @@ export function StudentProfile() {
         <User className="h-16 w-16 text-muted-foreground/40" />
         <h2 className="text-xl font-semibold">Student not found</h2>
         <Button asChild variant="outline">
-          <Link to="/students">← Back to students</Link>
+          <Link to={portalMode ? "/" : "/students"}>← Back</Link>
         </Button>
       </div>
     )
@@ -209,22 +289,6 @@ export function StudentProfile() {
   const fullName = `${student.first_name} ${student.last_name}`
   const enrollment = student.enrollment
   const totalPending = student.invoices.reduce((sum, inv) => sum + Number(inv.due_amount ?? 0), 0)
-
-  async function handleSaveServicePreference() {
-    if (!student) return
-    setSavingService(true)
-    try {
-      await updateStudentServicePreference(student.id, transportMode)
-      toast.success("Service preference updated")
-      qc.invalidateQueries({ queryKey: ["student-profile", studentId] })
-      qc.invalidateQueries({ queryKey: ["pending-hostel"] })
-      qc.invalidateQueries({ queryKey: ["pending-transport"] })
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Update failed")
-    } finally {
-      setSavingService(false)
-    }
-  }
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500 max-w-5xl mx-auto">
@@ -238,7 +302,7 @@ export function StudentProfile() {
           currentClassName={enrollment.section.class.name}
           academicYearId={enrollment.academic_year_id}
           onClose={() => setTransferOpen(false)}
-          onSuccess={() => qc.invalidateQueries({ queryKey: ["student-profile", studentId] })}
+          onSuccess={() => qc.invalidateQueries({ queryKey: ["student-profile", effectiveStudentId] })}
         />
       )}
 
@@ -246,11 +310,14 @@ export function StudentProfile() {
       <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
         <div className="flex items-center gap-3">
           <Button asChild variant="ghost" size="icon">
-            <Link to="/students"><ArrowLeft className="h-5 w-5" /></Link>
+            <Link to={portalMode ? "/" : "/students"}><ArrowLeft className="h-5 w-5" /></Link>
           </Button>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{fullName}</h1>
-            <p className="text-muted-foreground flex items-center gap-2 mt-0.5">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+              {portalMode ? "Student profile" : fullName}
+            </h1>
+            <p className="text-muted-foreground flex items-center gap-2 mt-0.5 flex-wrap">
+              {portalMode && <span className="text-sm font-medium text-foreground">{fullName}</span>}
               <Badge variant="outline" className="text-xs">{student.admission_no}</Badge>
               {enrollment && (
                 <span className="text-sm">
@@ -261,19 +328,15 @@ export function StudentProfile() {
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
-          {canEdit && (
-            <>
-              {!editing && (
-                <Button variant="outline" size="sm" className="gap-2" onClick={startEditing}>
-                  <Edit2 className="h-4 w-4" /> Edit Details
-                </Button>
-              )}
-              {enrollment && (
-                <Button variant="outline" size="sm" className="gap-2" onClick={() => setTransferOpen(true)}>
-                  <ArrowRightLeft className="h-4 w-4" /> Transfer Section
-                </Button>
-              )}
-            </>
+          {canEdit && !editing && (
+            <Button variant="outline" size="sm" className="gap-2" onClick={startEditing}>
+              <Edit2 className="h-4 w-4" /> Edit Details
+            </Button>
+          )}
+          {canManageAcademics && !portalMode && enrollment && (
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => setTransferOpen(true)}>
+              <ArrowRightLeft className="h-4 w-4" /> Transfer Section
+            </Button>
           )}
         </div>
       </div>
@@ -342,7 +405,7 @@ export function StudentProfile() {
           </CardHeader>
           <CardContent>
             <div className="text-xl font-bold">{enrollment?.roll_no || "Not assigned"}</div>
-            {canEdit && enrollment && !enrollment.roll_no && (
+            {canManageAcademics && enrollment && !enrollment.roll_no && (
               <Button
                 variant="link"
                 size="sm"
@@ -377,46 +440,71 @@ export function StudentProfile() {
           classTeacherPhone={classTeacher?.class_teacher_phone}
           classTeacherEmail={classTeacher?.class_teacher_email}
         />
-        <Card>
+        <Card className="md:col-span-1">
           <CardHeader>
-            <CardTitle className="text-base">Service preferences</CardTitle>
-            <CardDescription>Hostel or school bus requests queue for VP allocation.</CardDescription>
+            <CardTitle className="text-base">Service & boarding</CardTitle>
+            <CardDescription>
+              Preference set by parents; VP allocates hostel rooms and bus routes.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {canEditService ? (
-              <>
-                <div className="grid gap-1.5">
-                  <Label>Transport / boarding</Label>
-                  <select
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    value={transportMode}
-                    onChange={(e) =>
-                      setTransportMode(e.target.value as "self" | "school_bus" | "hostel")
-                    }
-                  >
-                    <option value="self">Self / own transport</option>
-                    <option value="school_bus">School bus</option>
-                    <option value="hostel">Hostel</option>
-                  </select>
-                </div>
-                <Button
-                  size="sm"
-                  onClick={handleSaveServicePreference}
-                  disabled={savingService}
-                >
-                  {savingService && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save preference
-                </Button>
-              </>
-            ) : (
-              <p className="text-sm capitalize">
-                {(student as { transport_mode?: string }).transport_mode?.replace(/_/g, " ") ??
-                  "Self"}
-              </p>
+          <CardContent className="space-y-3 text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-muted-foreground">Preference</span>
+              <Badge variant="outline" className="capitalize">
+                {(serviceDetails?.transport_mode ?? "self").replace(/_/g, " ")}
+              </Badge>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div>
+                <p className="text-muted-foreground text-xs uppercase tracking-wide">Hostel</p>
+                <p className="font-medium mt-0.5">{hostelStatusLabel()}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs uppercase tracking-wide">Transport</p>
+                <p className="font-medium mt-0.5">{transportStatusLabel()}</p>
+              </div>
+            </div>
+            {(serviceDetails?.parent_phone || serviceDetails?.parent_email) && (
+              <div className="pt-1 border-t text-xs text-muted-foreground space-y-0.5">
+                {serviceDetails.parent_phone && <p>Parent phone: {serviceDetails.parent_phone}</p>}
+                {serviceDetails.parent_email && <p>Parent email: {serviceDetails.parent_email}</p>}
+              </div>
             )}
+            <div className="flex flex-wrap gap-2 pt-1">
+              {canManageHostel && serviceDetails?.transport_mode === "hostel" && (
+                <Button variant="outline" size="sm" className="gap-1.5 h-8" asChild>
+                  <Link
+                    to={`/hostel?tab=allocate&admissionNo=${encodeURIComponent(serviceDetails.admission_no)}`}
+                  >
+                    <Home className="h-3.5 w-3.5" />
+                    Manage hostel
+                    <ExternalLink className="h-3 w-3 opacity-60" />
+                  </Link>
+                </Button>
+              )}
+              {canManageTransport && serviceDetails?.transport_mode === "school_bus" && (
+                <Button variant="outline" size="sm" className="gap-1.5 h-8" asChild>
+                  <Link
+                    to={`/transport?tab=allocate&admissionNo=${encodeURIComponent(serviceDetails.admission_no)}`}
+                  >
+                    <Bus className="h-3.5 w-3.5" />
+                    Manage transport
+                    <ExternalLink className="h-3 w-3 opacity-60" />
+                  </Link>
+                </Button>
+              )}
+            </div>
+            <StudentHostelStatusPanel
+              studentId={student.id}
+              transportMode={serviceDetails?.transport_mode}
+            />
           </CardContent>
         </Card>
       </div>
+
+      {showPortalCredentials && (
+        <StudentPortalCredentialsPanel studentId={student.id} />
+      )}
 
       {/* Tabs */}
       <Tabs defaultValue="personal" className="space-y-4">
@@ -437,18 +525,22 @@ export function StudentProfile() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-col md:flex-row gap-6">
-                <PhotoUpload
-                  schoolId={student.school_id}
-                  studentId={student.id}
-                  currentPhotoUrl={student.photo_url}
-                  studentName={fullName}
-                  onUploaded={() =>
-                    invalidateAfterStudentPortraitChange(qc, {
-                      schoolId: student.school_id,
-                      studentId: student.id,
-                    })
-                  }
-                />
+                {portalMode ? (
+                  <PortalPhoto photoUrl={student.photo_url} name={fullName} />
+                ) : (
+                  <PhotoUpload
+                    schoolId={student.school_id}
+                    studentId={student.id}
+                    currentPhotoUrl={student.photo_url}
+                    studentName={fullName}
+                    onUploaded={() =>
+                      invalidateAfterStudentPortraitChange(qc, {
+                        schoolId: student.school_id,
+                        studentId: student.id,
+                      })
+                    }
+                  />
+                )}
                 <div className="flex-1">
                   {editing ? (
                     <Form {...form}>
@@ -486,11 +578,43 @@ export function StudentProfile() {
                           <FormField control={form.control} name="nationality" render={({ field }) => (
                             <FormItem><FormLabel>Nationality</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl></FormItem>
                           )} />
+                          <FormField control={form.control} name="religion" render={({ field }) => (
+                            <FormItem><FormLabel>Religion</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl></FormItem>
+                          )} />
+                          <FormField control={form.control} name="category" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Category</FormLabel>
+                              <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...field} value={field.value || ""}>
+                                <option value="">Select</option>
+                                <option value="general">General</option>
+                                <option value="obc">OBC</option>
+                                <option value="sc">SC</option>
+                                <option value="st">ST</option>
+                                <option value="ews">EWS</option>
+                                <option value="other">Other</option>
+                              </select>
+                            </FormItem>
+                          )} />
                           <FormField control={form.control} name="phone" render={({ field }) => (
                             <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl></FormItem>
                           )} />
                           <FormField control={form.control} name="email" render={({ field }) => (
                             <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} value={field.value || ""} /></FormControl></FormItem>
+                          )} />
+                          <FormField control={form.control} name="address_street" render={({ field }) => (
+                            <FormItem className="sm:col-span-2">
+                              <FormLabel>Street / locality</FormLabel>
+                              <FormControl><Input {...field} value={field.value || ""} /></FormControl>
+                            </FormItem>
+                          )} />
+                          <FormField control={form.control} name="address_city" render={({ field }) => (
+                            <FormItem><FormLabel>City</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl></FormItem>
+                          )} />
+                          <FormField control={form.control} name="address_state" render={({ field }) => (
+                            <FormItem><FormLabel>State</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl></FormItem>
+                          )} />
+                          <FormField control={form.control} name="address_zip" render={({ field }) => (
+                            <FormItem><FormLabel>PIN / ZIP</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl></FormItem>
                           )} />
                         </div>
                         <div className="flex gap-3 pt-2">
@@ -517,6 +641,16 @@ export function StudentProfile() {
                         value={student.address ? [student.address.street, student.address.city, student.address.state, student.address.zip].filter(Boolean).join(", ") : null}
                         className="sm:col-span-2"
                       />
+                      {student.medical_info && Object.keys(student.medical_info).length > 0 && (
+                        <InfoRow
+                          label="Medical notes"
+                          value={Object.entries(student.medical_info)
+                            .filter(([, v]) => v)
+                            .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`)
+                            .join(" · ")}
+                          className="sm:col-span-2"
+                        />
+                      )}
                     </div>
                   )}
                 </div>
@@ -530,15 +664,41 @@ export function StudentProfile() {
           <Card>
             <CardHeader>
               <CardTitle>Documents</CardTitle>
-              <CardDescription>Upload and manage student documents — birth certificates, transfer certificates, previous marksheets, etc.</CardDescription>
+              <CardDescription>
+                {portalMode
+                  ? "Documents on file for this student."
+                  : "Upload and manage student documents — birth certificates, transfer certificates, previous marksheets, etc."}
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <DocumentUpload
-                schoolId={student.school_id}
-                studentId={student.id}
-                documents={student.documents}
-                onUpdate={() => qc.invalidateQueries({ queryKey: ["student-profile", studentId] })}
-              />
+              {portalMode ? (
+                student.documents.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No documents on file.</p>
+                ) : (
+                  <ul className="space-y-2 text-sm">
+                    {student.documents.map((doc, i) => (
+                      <li key={`${doc.filename}-${i}`} className="flex items-center justify-between gap-2 border rounded-md px-3 py-2">
+                        <span className="font-medium">{doc.label || doc.filename}</span>
+                        <a
+                          href={doc.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary text-xs underline shrink-0"
+                        >
+                          View
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )
+              ) : (
+                <DocumentUpload
+                  schoolId={student.school_id}
+                  studentId={student.id}
+                  documents={student.documents}
+                  onUpdate={() => qc.invalidateQueries({ queryKey: ["student-profile", effectiveStudentId] })}
+                />
+              )}
             </CardContent>
           </Card>
         </TabsContent>

@@ -22,14 +22,17 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/features/auth/hooks/useAuth"
+import { hasAnySchoolRole } from "@/features/auth/lib/schoolRoles"
 import {
   getExams,
+  getExamsForSections,
   createExam,
   deleteExam,
   getSubjects,
   getSectionsForSchool,
   type ExamFormValues,
 } from "../api/exams.api"
+import { getPortalSectionIds } from "@/features/students/api/portalStudents.api"
 
 const EXAM_TYPES = [
   { value: "unit_test", label: "Unit Test" },
@@ -43,16 +46,29 @@ const EXAM_TYPES = [
 export function ExamManagement() {
   const activeSchoolId = useAuth((s) => s.activeSchoolId)
   const activeRole = useAuth((s) => s.activeRole)
+  const schoolRoles = useAuth((s) => s.schoolRoles)
   const user = useAuth((s) => s.user)
   const qc = useQueryClient()
   const [creating, setCreating] = useState(false)
 
-  const canManage = !!(activeRole && new Set(["principal", "school_admin", "teacher", "class_teacher"]).has(activeRole))
+  const canManage =
+    hasAnySchoolRole(schoolRoles, ["teacher", "class_teacher"]) ||
+    !!(activeRole && new Set(["principal", "school_admin"]).has(activeRole))
+  const isPortalViewer = activeRole === "parent" || activeRole === "student"
+
+  const { data: portalSectionIds = [] } = useQuery({
+    queryKey: ["portal-section-ids", user?.id, activeSchoolId, activeRole],
+    queryFn: () => getPortalSectionIds(user!.id, activeSchoolId!, activeRole!),
+    enabled: !!isPortalViewer && !!user?.id && !!activeSchoolId && !!activeRole,
+  })
 
   const { data: exams = [], isLoading } = useQuery({
-    queryKey: ["exams", activeSchoolId],
-    queryFn: () => getExams(activeSchoolId!),
-    enabled: !!activeSchoolId,
+    queryKey: ["exams", activeSchoolId, isPortalViewer ? portalSectionIds.join(",") : "all"],
+    queryFn: () =>
+      isPortalViewer
+        ? getExamsForSections(activeSchoolId!, portalSectionIds)
+        : getExams(activeSchoolId!),
+    enabled: !!activeSchoolId && (!isPortalViewer || portalSectionIds.length > 0),
   })
 
   const { data: subjects = [] } = useQuery<any[]>({
@@ -131,7 +147,11 @@ export function ExamManagement() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Examinations</h1>
-          <p className="text-muted-foreground mt-1">Create tests, enter marks, and view results with analytics.</p>
+          <p className="text-muted-foreground mt-1">
+            {isPortalViewer
+              ? "Exams scheduled for your class section only."
+              : "Create tests, enter marks, and view results with analytics."}
+          </p>
         </div>
         {canManage && (
           <Button className="gap-2" onClick={() => setCreating(!creating)}>
@@ -232,9 +252,13 @@ export function ExamManagement() {
       {exams.length === 0 && !creating ? (
         <div className="flex flex-col items-center justify-center py-16 border-2 border-dashed rounded-xl text-muted-foreground">
           <ClipboardList className="h-14 w-14 opacity-30 mb-4" />
-          <h3 className="text-lg font-semibold text-foreground">No examinations yet</h3>
+          <h3 className="text-lg font-semibold text-foreground">
+            {isPortalViewer ? "No exams for your class yet" : "No examinations yet"}
+          </h3>
           <p className="text-sm mt-1 max-w-md text-center">
-            Click "Create Exam" to define a test. You can then enter marks and view analytics.
+            {isPortalViewer
+              ? "When exams are scheduled for your section, they will appear here."
+              : 'Click "Create Exam" to define a test. You can then enter marks and view analytics.'}
           </p>
         </div>
       ) : (
@@ -289,7 +313,7 @@ export function ExamManagement() {
                   )}
                   <Button asChild variant="outline" size="sm" className="gap-1.5 flex-1">
                     <Link to={`/exams/${exam.id}/results`}>
-                      <BarChart3 className="h-3.5 w-3.5" /> Results
+                      <BarChart3 className="h-3.5 w-3.5" /> {isPortalViewer ? "My result" : "Results"}
                     </Link>
                   </Button>
                   {canManage && (

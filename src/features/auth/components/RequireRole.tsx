@@ -2,13 +2,15 @@ import { useEffect, useMemo } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 
-import { getRolesAllowedForPath } from "@/config/navigation"
+import { getRolesAllowedForPath, pathAllowedForRoles } from "@/config/navigation"
 import { useAuth } from "@/features/auth/hooks/useAuth"
 
 export function RequireRole({ children }: { children: React.ReactNode }) {
   const location = useLocation()
   const navigate = useNavigate()
   const activeRole = useAuth((s) => s.activeRole)
+  const schoolRoles = useAuth((s) => s.schoolRoles)
+  const platformRole = useAuth((s) => s.platformRole)
   const isLoading = useAuth((s) => s.isLoading)
 
   const allowed = useMemo(
@@ -16,20 +18,22 @@ export function RequireRole({ children }: { children: React.ReactNode }) {
     [location.pathname],
   )
 
+  const hasAccess = pathAllowedForRoles(allowed, schoolRoles, platformRole)
+
   useEffect(() => {
     if (isLoading) return
-    if (!activeRole) {
+    if (!activeRole && !platformRole) {
       toast.error("Your account has no assigned role. Please contact an administrator.")
       navigate("/", { replace: true })
       return
     }
-    if (allowed && !allowed.includes(activeRole)) {
+    if (allowed && !hasAccess) {
       toast.error("You do not have access to that page.")
       navigate("/", { replace: true })
     }
-  }, [activeRole, allowed, isLoading, navigate, location.pathname])
+  }, [activeRole, platformRole, allowed, hasAccess, isLoading, navigate, location.pathname])
 
-  if (isLoading || !activeRole || (allowed && !allowed.includes(activeRole))) {
+  if (isLoading || (!activeRole && !platformRole) || (allowed && !hasAccess)) {
     return null
   }
 

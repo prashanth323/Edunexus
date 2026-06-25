@@ -1,4 +1,5 @@
 import { useAuth } from "@/features/auth/hooks/useAuth"
+import { hasAnyTeachingRole } from "@/features/auth/lib/schoolRoles"
 import { LmsParentHome } from "@/features/lms/pages/LmsParentHome"
 import { StudentHomeworkList } from "../components/StudentHomeworkList"
 import { TeacherHomeworkHub } from "../components/TeacherHomeworkHub"
@@ -8,6 +9,7 @@ const PRINCIPAL_LIKE_ROLES = new Set(["principal", "vice_principal", "school_adm
 
 export function HomeworkDashboard() {
   const activeRole = useAuth((s) => s.activeRole)
+  const schoolRoles = useAuth((s) => s.schoolRoles)
 
   if (activeRole === "parent") {
     return <LmsParentHome />
@@ -17,7 +19,7 @@ export function HomeworkDashboard() {
     return <StudentHomeworkList />
   }
 
-  if (activeRole === "teacher" || activeRole === "class_teacher") {
+  if (hasAnyTeachingRole(schoolRoles)) {
     return <TeacherHomeworkHub />
   }
 

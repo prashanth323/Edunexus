@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
-import { BookOpen, CalendarCheck, CalendarDays, ClipboardList, CreditCard, GraduationCap, IdCard, Megaphone, TrendingUp } from "lucide-react"
+import { BookOpen, CalendarCheck, CalendarDays, ClipboardList, CreditCard, GraduationCap, IdCard, Megaphone, TrendingUp, User } from "lucide-react"
 import { Link } from "react-router-dom"
 
 import { Card, CardContent, CardDescription, CardFooter, CardGrid, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button"
 import { ClassTeacherCard } from "@/components/school/ClassTeacherCard"
 import { useAuth } from "@/features/auth/hooks/useAuth"
 import { getStudentClassTeacher } from "@/features/students/api/studentService.api"
+import { fetchDailyAttendanceForStudent } from "@/features/attendance/lib/dailyAttendanceRead"
+import { AttendanceTodayBanner } from "@/features/attendance/components/AttendanceTodayBanner"
 import {
   getStaggerItem,
   getStudentPageVariants,
@@ -107,11 +109,13 @@ async function getStudentDashboardData(
     .eq("due_date", today)
     .is("deleted_at", null)
 
+  const sectionId = enrollment?.section_id ?? ""
   const { count: examCount } = await supabase
     .from("exams")
     .select("id", { count: "exact", head: true })
     .eq("school_id", schoolId)
-    .gte("start_date", today)
+    .eq("section_id", sectionId)
+    .gte("date", today)
     .is("deleted_at", null)
 
   return {
@@ -153,6 +157,12 @@ const quickLinks = [
     icon: CalendarCheck,
   },
   {
+    title: "My profile",
+    desc: "View your full student record and service details.",
+    href: "/my-profile",
+    icon: User,
+  },
+  {
     title: "Student ID Card",
     desc: "View and print your school identity card.",
     href: "/student-id-card",
@@ -177,6 +187,14 @@ export function StudentDashboard() {
     enabled: !!info?.student_id,
   })
 
+  const todayStr = new Date().toISOString().split("T")[0]
+  const { data: todayAttendance = [] } = useQuery({
+    queryKey: ["student-dashboard-today-attendance", info?.student_id, todayStr],
+    queryFn: () => fetchDailyAttendanceForStudent(info!.student_id!, todayStr, todayStr),
+    enabled: !!info?.student_id,
+  })
+  const todayAttendanceRow = todayAttendance[0]
+
   const pageV = getStudentPageVariants(!!reduce)
   const staggerI = getStaggerItem(!!reduce)
   const hoverLift = getCardHoverLiftProps(!!reduce)
@@ -196,6 +214,13 @@ export function StudentDashboard() {
           </p>
         </div>
       </div>
+
+      {todayAttendanceRow && (
+        <AttendanceTodayBanner
+          status={todayAttendanceRow.status}
+          remarks={todayAttendanceRow.remarks}
+        />
+      )}
 
       <AnimatePresence mode="wait">
         {isLoading ? (
@@ -302,7 +327,7 @@ export function StudentDashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{info.upcoming_exams}</div>
-                  <p className="text-xs text-muted-foreground mt-1">Scheduled ahead</p>
+                  <p className="text-xs text-muted-foreground mt-1">Scheduled for your section</p>
                 </CardContent>
               </Card>
 

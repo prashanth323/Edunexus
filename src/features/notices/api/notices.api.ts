@@ -17,8 +17,11 @@ export type Notice = {
   author?: { first_name: string; last_name: string } | null
 }
 
+const SCHOOL_WIDE: NoticeAudience = "all"
+const STAFF_AUDIENCES: NoticeAudience[] = ["staff", SCHOOL_WIDE]
+
 function audiencesVisibleToRole(role: string | null): NoticeAudience[] | null {
-  if (!role) return ["all"]
+  if (!role) return ["parents", SCHOOL_WIDE]
 
   const fullAccess = [
     "principal",
@@ -29,27 +32,37 @@ function audiencesVisibleToRole(role: string | null): NoticeAudience[] | null {
     "support_admin",
     "analyst",
     "finance_admin",
-    "hr_manager",
-    "admission_manager",
-    "transport_manager",
-    "accountant",
-    "librarian",
   ]
 
   if (fullAccess.includes(role)) return null
 
   const map: Partial<Record<string, NoticeAudience[]>> = {
-    teacher: ["all", "teachers", "staff"],
-    class_teacher: ["all", "teachers", "staff"],
-    student: ["all", "students"],
-    parent: ["all", "parents"],
-    counselor: ["all", "teachers", "staff", "parents"],
+    teacher: ["teachers", SCHOOL_WIDE],
+    class_teacher: ["teachers", SCHOOL_WIDE],
+    student: ["students", SCHOOL_WIDE],
+    parent: ["parents", SCHOOL_WIDE],
+    counselor: ["parents", "teachers", SCHOOL_WIDE],
+    hostel_manager: STAFF_AUDIENCES,
+    transport_manager: STAFF_AUDIENCES,
+    head_accountant: STAFF_AUDIENCES,
+    accountant: STAFF_AUDIENCES,
+    librarian: STAFF_AUDIENCES,
+    receptionist: STAFF_AUDIENCES,
+    hr_manager: STAFF_AUDIENCES,
+    admission_manager: STAFF_AUDIENCES,
   }
 
-  return map[role] ?? ["all"]
+  return map[role] ?? [SCHOOL_WIDE]
+}
+
+export function hasFullNoticeAccess(role: string | null): boolean {
+  return audiencesVisibleToRole(role) === null
 }
 
 export async function getNotices(schoolId: string, activeRole: string | null): Promise<Notice[]> {
+  const audiences = audiencesVisibleToRole(activeRole)
+  const portalRole = audiences !== null
+
   let query = supabase
     .from("notices")
     .select(
@@ -70,7 +83,10 @@ export async function getNotices(schoolId: string, activeRole: string | null): P
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
 
-  const audiences = audiencesVisibleToRole(activeRole)
+  if (portalRole) {
+    query = query.eq("is_published", true)
+  }
+
   if (audiences?.length) {
     query = query.in("audience", audiences)
   }

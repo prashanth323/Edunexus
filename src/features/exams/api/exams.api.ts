@@ -66,6 +66,26 @@ export async function getExams(schoolId: string) {
   return data as Exam[]
 }
 
+export async function getExamsForSections(schoolId: string, sectionIds: string[]) {
+  if (!sectionIds.length) return [] as Exam[]
+
+  const { data, error } = await supabase
+    .from("exams")
+    .select(`
+      *,
+      exam_type:type,
+      subjects (name),
+      sections (name, classes (name))
+    `)
+    .eq("school_id", schoolId)
+    .in("section_id", sectionIds)
+    .is("deleted_at", null)
+    .order("date", { ascending: false })
+    .limit(100)
+  if (error) throw error
+  return data as Exam[]
+}
+
 export async function createExam(schoolId: string, values: ExamFormValues, _createdBy: string) {
   // Fetch class_id and academic_year_id from the selected section
   const { data: sectionData, error: secErr } = await supabase

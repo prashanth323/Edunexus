@@ -1,13 +1,15 @@
 import { Link, useLocation } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/features/auth/hooks/useAuth"
-import { navLinksForRole } from "@/config/navigation"
+import { navLinksForRoles } from "@/config/navigation"
 
 export function Sidebar() {
   const location = useLocation()
+  const schoolRoles = useAuth((state) => state.schoolRoles)
+  const platformRole = useAuth((state) => state.platformRole)
   const activeRole = useAuth((state) => state.activeRole)
 
-  const filteredLinks = navLinksForRole(activeRole)
+  const filteredLinks = navLinksForRoles(schoolRoles, platformRole, activeRole)
 
   return (
     <aside className="hidden border-r bg-muted/20 md:block w-64 flex-shrink-0">

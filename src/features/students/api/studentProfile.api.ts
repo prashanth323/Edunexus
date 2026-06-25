@@ -331,10 +331,10 @@ export async function assignRollNumber(enrollmentId: string, rollNo: string) {
 
 // ── Update Student Details ──────────────────────────────
 export async function updateStudentProfile(studentId: string, updates: Record<string, unknown>) {
-  const { error } = await supabase
-    .from("students")
-    .update(updates)
-    .eq("id", studentId)
+  const { error } = await supabase.rpc("update_linked_student_details", {
+    p_student_id: studentId,
+    p_updates: updates,
+  })
   if (error) throw error
 }
 

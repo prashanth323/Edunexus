@@ -26,6 +26,7 @@ import {
   ATTENDANCE_STATUS_BADGE_CLASSES,
   fetchDailyAttendanceForStudent,
 } from "../lib/dailyAttendanceRead"
+import { AttendanceTodayBanner } from "../components/AttendanceTodayBanner"
 
 export function AttendanceStudentView() {
   const reduce = useReducedMotion()
@@ -52,6 +53,15 @@ export function AttendanceStudentView() {
     queryFn: () => fetchDailyAttendanceForStudent(studentId!, fromDate, toDate),
     enabled: !!studentId && !!fromDate && !!toDate,
   })
+
+  const todayStr = today.toISOString().split("T")[0]
+
+  const { data: todayAttendance = [] } = useQuery({
+    queryKey: ["student-self-attendance-today", studentId, todayStr],
+    queryFn: () => fetchDailyAttendanceForStudent(studentId!, todayStr, todayStr),
+    enabled: !!studentId,
+  })
+  const todayRow = todayAttendance[0]
 
   const stats = {
     total: attendance.length,
@@ -156,6 +166,10 @@ export function AttendanceStudentView() {
         <h1 className="text-3xl font-bold tracking-tight">Attendance</h1>
         <p className="text-muted-foreground mt-1">Your daily attendance for the selected period.</p>
       </div>
+
+      {todayRow && (
+        <AttendanceTodayBanner status={todayRow.status} remarks={todayRow.remarks} />
+      )}
 
       <CardGrid className="grid gap-6 md:grid-cols-4 items-start" staggerVariants={gridVariants}>
         <Card variants={staggerI} className="md:col-span-1">
@@ -265,6 +279,7 @@ export function AttendanceStudentView() {
                         <TableHead>Date</TableHead>
                         <TableHead>Day</TableHead>
                         <TableHead className="text-center">Status</TableHead>
+                        <TableHead>Remarks</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -288,6 +303,11 @@ export function AttendanceStudentView() {
                               >
                                 {row.status.replace(/_/g, " ")}
                               </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {(row.status === "late" || row.status === "half_day") && row.remarks
+                                ? row.remarks
+                                : "—"}
                             </TableCell>
                           </TableRow>
                         )

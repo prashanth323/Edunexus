@@ -23,24 +23,29 @@ export function HostelManageDialog() {
   const [open, setOpen] = useState(false)
   const [roomNo, setRoomNo] = useState("")
   const [block, setBlock] = useState("")
+  const [floor, setFloor] = useState("")
+  const [roomType, setRoomType] = useState("double")
   const [capacity, setCapacity] = useState("2")
+  const [monthlyFee, setMonthlyFee] = useState("0")
+  const [amenities, setAmenities] = useState("")
 
-  const canWrite = activeRole === "vice_principal" || activeRole === "principal"
+  const canWrite = activeRole === "hostel_manager"
 
   const roomMutation = useMutation({
     mutationFn: () =>
       createHostelRoom(activeSchoolId!, {
         room_no: roomNo,
         block: block || null,
-        floor: null,
-        type: "double",
+        floor: floor ? Number(floor) : null,
+        type: roomType,
         capacity: Number(capacity),
-        monthly_fee: 0,
-        is_active: true,
+        monthly_fee: Number(monthlyFee) || 0,
+        amenities: amenities.trim() ? amenities.split(",").map((s) => s.trim()) : null,
+        is_active: false,
       }),
     onSuccess: () => {
-      toast.success("Room created")
-      qc.invalidateQueries({ queryKey: ["hostel-rooms"] })
+      toast.success("Room draft saved — submit to VP from the rooms list")
+      qc.invalidateQueries({ queryKey: ["hostel-rooms-mgr"] })
       setOpen(false)
       setRoomNo("")
       setBlock("")
@@ -72,17 +77,46 @@ export function HostelManageDialog() {
                 <Input value={block} onChange={(e) => setBlock(e.target.value)} />
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1.5">
+                <Label>Floor</Label>
+                <Input type="number" value={floor} onChange={(e) => setFloor(e.target.value)} />
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Type</Label>
+                <select
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                  value={roomType}
+                  onChange={(e) => setRoomType(e.target.value)}
+                >
+                  <option value="single">Single</option>
+                  <option value="double">Double</option>
+                  <option value="triple">Triple</option>
+                  <option value="dormitory">Dormitory</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1.5">
+                <Label>Capacity</Label>
+                <Input type="number" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Monthly fee</Label>
+                <Input type="number" value={monthlyFee} onChange={(e) => setMonthlyFee(e.target.value)} />
+              </div>
+            </div>
             <div className="grid gap-1.5">
-              <Label>Capacity</Label>
-              <Input type="number" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
+              <Label>Amenities (comma-separated)</Label>
+              <Input value={amenities} onChange={(e) => setAmenities(e.target.value)} placeholder="AC, attached bath" />
             </div>
             <p className="text-xs text-muted-foreground">
-              To assign students, use the Allocate tab and search by admission number.
+              Room is saved as a draft. Submit to the VP for approval before students can be assigned.
             </p>
           </div>
           <DialogFooter>
             <Button onClick={() => roomMutation.mutate()} disabled={!roomNo.trim()}>
-              Create room
+              Create draft
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,3 +1,4 @@
+import { useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { motion, useReducedMotion } from "framer-motion"
 import {
@@ -7,29 +8,37 @@ import {
   ChevronRight,
   ClipboardCheck,
   ClipboardList,
+  GraduationCap,
   Megaphone,
   PlusCircle,
   Users,
 } from "lucide-react"
 import { Link } from "react-router-dom"
 
+import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardGrid, CardHeader, CardTitle } from "@/components/ui/card"
 import { GenericCardSkeleton, StatCardSkeletonGrid } from "@/components/ui/card-skeleton"
-import { getTeacherDashboard } from "../api/dashboard.api"
+import { getHomeroomSections, getTeacherDashboard } from "../api/dashboard.api"
 import { useAuth } from "@/features/auth/hooks/useAuth"
+import {
+  formatTeachingRolesLabel,
+  hasClassTeacherCapabilities,
+  hasSubjectTeacherCapabilities,
+} from "@/features/auth/lib/schoolRoles"
 import { getStaggerItem } from "@/features/student-ui/studentMotion"
 import { cn } from "@/lib/utils"
 import { getCardHoverLiftProps } from "@/lib/ui-motion"
 
 const DAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
-const TEACHER_QUICK_LINKS = [
-  {
-    to: "/attendance",
-    title: "Take attendance",
-    description: "Open the attendance screen for your teaching sections.",
-    icon: ClipboardCheck,
-  },
+type QuickLink = {
+  to: string
+  title: string
+  description: string
+  icon: typeof BookOpen
+}
+
+const SUBJECT_TEACHER_LINKS: QuickLink[] = [
   {
     to: "/exams",
     title: "Create test / Enter marks",
@@ -54,24 +63,74 @@ const TEACHER_QUICK_LINKS = [
     description: "Create a course and add modules, lessons, and assignments.",
     icon: PlusCircle,
   },
+]
+
+const CLASS_TEACHER_LINKS: QuickLink[] = [
+  {
+    to: "/students",
+    title: "My students",
+    description: "View and update homeroom student profiles.",
+    icon: Users,
+  },
+  {
+    to: "/students?tab=timetable",
+    title: "Class timetable",
+    description: "View your homeroom section weekly schedule.",
+    icon: Calendar,
+  },
+  {
+    to: "/attendance",
+    title: "Take attendance",
+    description: "Mark daily attendance for your homeroom section.",
+    icon: ClipboardCheck,
+  },
+]
+
+const SHARED_TEACHER_LINKS: QuickLink[] = [
   {
     to: "/notices",
     title: "Send notice",
     description: "Post announcements to students, parents, or entire school.",
     icon: Megaphone,
   },
-] as const
+]
 
 export function TeacherDashboard() {
   const reduce = useReducedMotion()
-  const { user, activeSchoolId } = useAuth()
+  const { user, activeSchoolId, schoolRoles } = useAuth()
   const staggerI = getStaggerItem(!!reduce)
   const hoverLift = getCardHoverLiftProps(!!reduce)
+
+  const isClassTeacher = hasClassTeacherCapabilities(schoolRoles)
+  const isSubjectTeacher = hasSubjectTeacherCapabilities(schoolRoles)
+  const roleLabel = formatTeachingRolesLabel(schoolRoles)
+
+  const quickLinks = useMemo(() => {
+    const links: QuickLink[] = []
+    if (isClassTeacher) links.push(...CLASS_TEACHER_LINKS)
+    if (isSubjectTeacher) links.push(...SUBJECT_TEACHER_LINKS)
+    if (!isClassTeacher && !isSubjectTeacher) {
+      links.push(...SUBJECT_TEACHER_LINKS, ...CLASS_TEACHER_LINKS)
+    }
+    links.push(...SHARED_TEACHER_LINKS)
+    const seen = new Set<string>()
+    return links.filter((l) => {
+      if (seen.has(l.to)) return false
+      seen.add(l.to)
+      return true
+    })
+  }, [isClassTeacher, isSubjectTeacher])
 
   const { data: sections, isLoading } = useQuery({
     queryKey: ["teacher-sections", activeSchoolId, user?.id],
     queryFn: () => getTeacherDashboard(user!.id, activeSchoolId!),
     enabled: !!user?.id && !!activeSchoolId,
+  })
+
+  const { data: homeroomSections = [] } = useQuery({
+    queryKey: ["homeroom-sections", activeSchoolId, user?.id],
+    queryFn: () => getHomeroomSections(user!.id, activeSchoolId!),
+    enabled: !!user?.id && !!activeSchoolId && isClassTeacher,
   })
 
   if (isLoading) {
@@ -102,7 +161,22 @@ export function TeacherDashboard() {
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Teacher Dashboard</h1>
-        <p className="text-muted-foreground mt-1">Manage your classes, students, and assignments.</p>
+        <p className="text-muted-foreground mt-1">
+          {roleLabel
+            ? `${roleLabel} — manage teaching, homeroom, and assignments.`
+            : "Manage your classes, students, and assignments."}
+        </p>
+        {isClassTeacher && homeroomSections.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            <GraduationCap className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Homeroom:</span>
+            {homeroomSections.map((sec) => (
+              <Badge key={sec.section_id} variant="secondary">
+                {sec.class_name} – {sec.section_name}
+              </Badge>
+            ))}
+          </div>
+        )}
       </div>
 
       <CardGrid className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -209,11 +283,11 @@ export function TeacherDashboard() {
         <Card className="lg:col-span-3 overflow-hidden border-muted/80 bg-gradient-to-b from-card to-muted/20" variants={staggerI}>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">Quick actions</CardTitle>
-            <CardDescription>Jump to common tasks (same routes as the sidebar).</CardDescription>
+            <CardDescription>Tasks based on your teaching roles.</CardDescription>
           </CardHeader>
           <CardContent>
             <CardGrid className="grid gap-3 sm:grid-cols-2">
-              {TEACHER_QUICK_LINKS.map(({ to, title, description, icon: Icon }) => (
+              {quickLinks.map(({ to, title, description, icon: Icon }) => (
                 <motion.div key={to} variants={staggerI} {...hoverLift} className="min-w-0">
                   <Link
                     to={to}

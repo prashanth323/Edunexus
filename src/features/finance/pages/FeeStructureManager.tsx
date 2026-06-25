@@ -1,6 +1,7 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query"
-import { Plus, Loader2, Trash2, DollarSign, Calendar, Send, Clock } from "lucide-react"
+import { Link } from "react-router-dom"
+import { Plus, Loader2, Trash2, DollarSign, Calendar, Send, Info } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -15,6 +16,7 @@ import {
   createFeeStructure,
   deleteFeeStructure,
   generateBulkInvoices,
+  groupFeeStructuresByClassAndTerm,
   type FeeStructureInput,
 } from "../api/feeManagement.api"
 import { getSectionsForSchool } from "@/features/exams/api/exams.api"
@@ -29,9 +31,16 @@ const FREQUENCIES = [
 
 export function FeeStructureManager() {
   const activeSchoolId = useAuth((s) => s.activeSchoolId)
+  const activeRole = useAuth((s) => s.activeRole)
   const qc = useQueryClient()
   const [creating, setCreating] = useState(false)
   const [assigning, setAssigning] = useState<string | null>(null)
+
+  const isHeadAccountant = activeRole === "head_accountant"
+  const isAccountant = activeRole === "accountant"
+  const canCreate = false
+  const canDelete = false
+  const canAssign = isAccountant
 
   // Fee structures
   const { data: structures = [], isLoading } = useQuery({
@@ -39,6 +48,11 @@ export function FeeStructureManager() {
     queryFn: () => getFeeStructures(activeSchoolId!),
     enabled: !!activeSchoolId,
   })
+
+  const groupedStructures = useMemo(
+    () => groupFeeStructuresByClassAndTerm(structures),
+    [structures],
+  )
 
   // Sections for bulk assignment
   const { data: sections = [] } = useQuery({
@@ -130,13 +144,43 @@ export function FeeStructureManager() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Fee Structures</h1>
           <p className="text-muted-foreground mt-1">
-            Define fee plans and assign them to classes to auto-generate student invoices.
+            {isHeadAccountant
+              ? "Fee structures are created automatically when the VP approves your class fee plan."
+              : isAccountant
+                ? "Generate student invoices from VP-approved fee structures."
+                : "View VP-approved fee structures used for invoice generation."}
           </p>
         </div>
-        <Button className="gap-2" onClick={() => setCreating(!creating)}>
-          <Plus className="h-4 w-4" /> New Fee Structure
-        </Button>
+        {canCreate && (
+          <Button className="gap-2" onClick={() => setCreating(!creating)}>
+            <Plus className="h-4 w-4" /> New Fee Structure
+          </Button>
+        )}
       </div>
+
+      {isHeadAccountant && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex gap-2 text-sm">
+              <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+              <p>
+                Draft term-wise fees under <strong>Class fee plans</strong>. After VP approval, rows appear here automatically.
+              </p>
+            </div>
+            <Button size="sm" asChild>
+              <Link to="/finance/fee-plans">Open class fee plans</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {isAccountant && (
+        <Card className="border-muted">
+          <CardContent className="py-3 text-sm text-muted-foreground">
+            Select a fee structure below and assign it to a section to generate invoices.
+          </CardContent>
+        </Card>
+      )}
 
       {/* Create form */}
       {creating && (
@@ -272,66 +316,87 @@ export function FeeStructureManager() {
         </div>
       )}
 
-      {/* Fee structure cards */}
-      {structures.length === 0 && !creating ? (
+      {/* Fee structure cards grouped by class and term */}
+      {groupedStructures.length === 0 && !creating ? (
         <div className="flex flex-col items-center justify-center py-16 border-2 border-dashed rounded-xl text-muted-foreground">
           <DollarSign className="h-14 w-14 opacity-30 mb-4" />
           <h3 className="text-lg font-semibold text-foreground">No fee structures</h3>
           <p className="text-sm mt-1 max-w-md text-center">
-            Create a fee structure to start generating invoices for students.
+            {isHeadAccountant
+              ? "Submit a class fee plan for VP approval to populate fee structures."
+              : "Approved fee structures from class fee plans will appear here."}
           </p>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {structures.map((fs) => (
-            <Card key={fs.id} className="flex flex-col hover:border-primary/40 transition-colors">
-              <CardHeader className="pb-3">
-                <div className="flex justify-between items-start gap-2">
-                  <CardTitle className="text-lg">{fs.name}</CardTitle>
-                  <Badge variant="outline" className="capitalize text-[10px] shrink-0">{fs.frequency.replace(/_/g, " ")}</Badge>
-                </div>
-                {fs.description && (
-                  <CardDescription className="mt-1">{fs.description}</CardDescription>
-                )}
-              </CardHeader>
-              <CardContent className="flex-1 space-y-2 text-sm">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <DollarSign className="h-3.5 w-3.5" />
-                  <span className="font-semibold text-foreground text-lg">${Number(fs.amount).toLocaleString()}</span>
-                  <span>per {fs.frequency.replace(/_/g, " ")}</span>
-                </div>
-                {fs.due_day && (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Calendar className="h-3.5 w-3.5" />
-                    <span>Due: {fs.due_day}th of each period</span>
+        <div className="space-y-8">
+          {groupedStructures.map((classGroup) => (
+            <div key={classGroup.classId} className="space-y-4">
+              <h2 className="text-lg font-semibold">{classGroup.className}</h2>
+              {classGroup.terms.map((term) => (
+                <div key={`${classGroup.classId}-${term.termOrder}`} className="space-y-3">
+                  <h3 className="text-sm font-medium text-muted-foreground">
+                    {term.termLabel}
+                  </h3>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {term.items.map((fs) => (
+                      <Card key={fs.id} className="flex flex-col hover:border-primary/40 transition-colors">
+                        <CardHeader className="pb-3">
+                          <div className="flex justify-between items-start gap-2">
+                            <CardTitle className="text-lg">{fs.name}</CardTitle>
+                            <Badge variant="outline" className="capitalize text-[10px] shrink-0">
+                              {fs.frequency.replace(/_/g, " ")}
+                            </Badge>
+                          </div>
+                          {fs.description && (
+                            <CardDescription className="mt-1">{fs.description}</CardDescription>
+                          )}
+                        </CardHeader>
+                        <CardContent className="flex-1 space-y-2 text-sm">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <DollarSign className="h-3.5 w-3.5" />
+                            <span className="font-semibold text-foreground text-lg">
+                              ₹{Number(fs.amount).toLocaleString()}
+                            </span>
+                          </div>
+                          {fs.due_day && (
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <Calendar className="h-3.5 w-3.5" />
+                              <span>Due day: {fs.due_day}</span>
+                            </div>
+                          )}
+                        </CardContent>
+                        <CardFooter className="border-t pt-3 flex gap-2">
+                          {canAssign ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex-1 gap-1.5"
+                              onClick={() => setAssigning(fs.id)}
+                            >
+                              <Send className="h-3.5 w-3.5" /> Assign to section
+                            </Button>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">
+                              Read-only — set via VP-approved class fee plans.
+                            </p>
+                          )}
+                          {canDelete && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
+                              onClick={() => handleDelete(fs.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </CardFooter>
+                      </Card>
+                    ))}
                   </div>
-                )}
-                {fs.late_fine_per_day && Number(fs.late_fine_per_day) > 0 && (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Clock className="h-3.5 w-3.5" />
-                    <span>Late fine: ${Number(fs.late_fine_per_day)}/day</span>
-                  </div>
-                )}
-              </CardContent>
-              <CardFooter className="border-t pt-3 flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1 gap-1.5"
-                  onClick={() => setAssigning(fs.id)}
-                >
-                  <Send className="h-3.5 w-3.5" /> Assign to Class
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
-                  onClick={() => handleDelete(fs.id)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </CardFooter>
-            </Card>
+                </div>
+              ))}
+            </div>
           ))}
         </div>
       )}

@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/features/auth/hooks/useAuth"
-import { getNotices, type Notice } from "../api/notices.api"
+import { getNotices, hasFullNoticeAccess, type Notice } from "../api/notices.api"
 import { CreateNoticeDialog } from "../components/CreateNoticeDialog"
 
 export function NoticesBoard() {
@@ -62,6 +62,8 @@ export function NoticesBoard() {
     activeRole &&
     ["super_admin", "principal", "school_admin", "vice_principal"].includes(activeRole)
 
+  const showAdminTabs = hasFullNoticeAccess(activeRole)
+
   function formatWhen(n: Notice) {
     const d = n.published_at ?? n.created_at
     try {
@@ -98,7 +100,7 @@ export function NoticesBoard() {
         <p className="text-sm text-muted-foreground rounded-md border border-dashed p-6 text-center">
           No active school selected. Choose a school from the menu above to load notices.
         </p>
-      ) : (
+      ) : showAdminTabs ? (
         <Tabs defaultValue="all" className="space-y-4">
           <TabsList>
             <TabsTrigger value="all">All</TabsTrigger>
@@ -117,6 +119,8 @@ export function NoticesBoard() {
             />
           </TabsContent>
         </Tabs>
+      ) : (
+        <NoticeGrid notices={filteredNotices} formatWhen={formatWhen} badgeFn={getAudienceBadgeVariant} />
       )}
     </div>
   )

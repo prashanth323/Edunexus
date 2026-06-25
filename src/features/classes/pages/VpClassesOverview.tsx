@@ -1,7 +1,9 @@
 import { useMemo } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { GraduationCap, Loader2, Users } from "lucide-react"
+import { GraduationCap, Loader2, Users, CalendarCheck } from "lucide-react"
+import { Link } from "react-router-dom"
 
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Table,
@@ -54,7 +56,34 @@ export function VpClassesOverview() {
         <p className="text-muted-foreground mt-1">
           Class teachers, enrollment, attendance, and exam performance by section.
         </p>
+        <Button variant="outline" size="sm" className="mt-3 gap-2" asChild>
+          <Link to="/attendance">
+            <CalendarCheck className="h-4 w-4" />
+            Today&apos;s absent by class
+          </Link>
+        </Button>
       </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Teaching roles guide</CardTitle>
+          <CardDescription>How subject teacher vs class teacher works</CardDescription>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground space-y-2">
+          <p>
+            <strong className="text-foreground">1. Set role type</strong> — Staff → Edit details → Teaching roles:
+            subject teacher, class teacher, or both.
+          </p>
+          <p>
+            <strong className="text-foreground">2. Assign homeroom</strong> — Pick the class teacher for each section
+            below. They can mark daily attendance and edit student profiles for that section.
+          </p>
+          <p>
+            <strong className="text-foreground">3. Assign subjects</strong> — Use Timetable to assign subject teaching
+            periods. Subject teachers use LMS, homework, and exams for those classes.
+          </p>
+        </CardContent>
+      </Card>
 
       {isLoading ? (
         <p className="text-muted-foreground flex items-center gap-2">

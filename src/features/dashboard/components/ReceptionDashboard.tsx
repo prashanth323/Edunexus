@@ -4,11 +4,9 @@ import { Link } from "react-router-dom"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { StatCardSkeletonGrid } from "@/components/ui/card-skeleton"
 import { useAuth } from "@/features/auth/hooks/useAuth"
 import { getApplications } from "@/features/admissions/api/admissions.api"
-import { getHalfDayRequests } from "@/features/attendance/api/halfDay.api"
 import { getLeads } from "@/features/crm/api/crm.api"
 
 export function ReceptionDashboard() {
@@ -23,12 +21,6 @@ export function ReceptionDashboard() {
   const { data: submittedApps = [], isLoading: submittedLoading } = useQuery({
     queryKey: ["reception-submitted-apps", activeSchoolId],
     queryFn: () => getApplications(activeSchoolId!, { status: "submitted" }),
-    enabled: !!activeSchoolId,
-  })
-
-  const { data: halfDayPending = [] } = useQuery({
-    queryKey: ["reception-half-day", activeSchoolId],
-    queryFn: () => getHalfDayRequests(activeSchoolId!, "pending"),
     enabled: !!activeSchoolId,
   })
 
@@ -56,12 +48,19 @@ export function ReceptionDashboard() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Reception Dashboard</h1>
           <p className="text-muted-foreground mt-1">
-            Admissions, documents, half-day requests, and front-desk operations.
+            Admissions, mid-day attendance, student lookup, and front-desk operations.
           </p>
         </div>
-        <Button asChild>
-          <Link to="/admissions">New admission <ArrowRight className="h-4 w-4 ml-1" /></Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" asChild>
+            <Link to="/attendance">
+              Mark late / half-day <CalendarCheck className="h-4 w-4 ml-1" />
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link to="/admissions">New admission <ArrowRight className="h-4 w-4 ml-1" /></Link>
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -92,18 +91,25 @@ export function ReceptionDashboard() {
             <p className="text-xs text-muted-foreground">Leads captured today</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-primary/20 bg-primary/5">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Half-day requests</CardTitle>
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <CalendarCheck className="h-4 w-4 text-primary" />
+              Mid-day attendance
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{halfDayPending.length}</div>
-            {halfDayPending.length > 0 && <Badge className="mt-1">Pending VP</Badge>}
+            <p className="text-xs text-muted-foreground mb-2">
+              Student left early or arrived late? Record late or half-day with reason.
+            </p>
+            <Button size="sm" variant="secondary" asChild className="w-full">
+              <Link to="/attendance">Open attendance marking</Link>
+            </Button>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Link to="/admissions" className="block">
           <Card className="hover:bg-accent/50 transition-colors h-full">
             <CardHeader>
@@ -118,16 +124,18 @@ export function ReceptionDashboard() {
             <CardHeader>
               <GraduationCap className="h-8 w-8 text-primary mb-2" />
               <CardTitle className="text-base">Students</CardTitle>
-              <CardDescription>Search and view student directory</CardDescription>
+              <CardDescription>Search by admission number and view directory</CardDescription>
             </CardHeader>
           </Card>
         </Link>
         <Link to="/attendance" className="block">
-          <Card className="hover:bg-accent/50 transition-colors h-full">
+          <Card className="hover:bg-accent/50 transition-colors h-full border-primary/20">
             <CardHeader>
               <CalendarCheck className="h-8 w-8 text-primary mb-2" />
-              <CardTitle className="text-base">Half-day requests</CardTitle>
-              <CardDescription>Submit half-day attendance requests</CardDescription>
+              <CardTitle className="text-base">Mark late / half-day</CardTitle>
+              <CardDescription>
+                Student sick or leaving mid-day? Look up admission number, mark status, and add reason.
+              </CardDescription>
             </CardHeader>
           </Card>
         </Link>

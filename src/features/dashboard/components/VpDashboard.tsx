@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
-import { ArrowRight, Bus, ClipboardCheck, GraduationCap, Home, Target, Users } from "lucide-react"
+import { format } from "date-fns"
+import { ArrowRight, Bell, Bus, ClipboardCheck, CreditCard, GraduationCap, Home, Target, Users } from "lucide-react"
 import { Link } from "react-router-dom"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,6 +16,10 @@ import {
   getPendingHostelStudents,
   getPendingTransportStudents,
 } from "@/features/students/api/studentService.api"
+import { getPendingFeePlans, getRecentFeeNotifications } from "@/features/finance/api/feePlans.api"
+import { getPendingBuses, getPendingRoutes } from "@/features/transport/api/transport.api"
+import { getPendingHostelRooms } from "@/features/hostel/api/hostel.api"
+import { getSectionAttendanceSnapshot } from "@/features/attendance/api/attendance.api"
 
 export function VpDashboard() {
   const activeSchoolId = useAuth((s) => s.activeSchoolId)
@@ -55,7 +60,46 @@ export function VpDashboard() {
     enabled: !!activeSchoolId,
   })
 
+  const { data: pendingFeePlans = [] } = useQuery({
+    queryKey: ["pending-fee-plans", activeSchoolId],
+    queryFn: () => getPendingFeePlans(activeSchoolId!),
+    enabled: !!activeSchoolId,
+  })
+
+  const { data: recentFeeNotifications = [] } = useQuery({
+    queryKey: ["recent-fee-notifications", activeSchoolId],
+    queryFn: () => getRecentFeeNotifications(activeSchoolId!, 5),
+    enabled: !!activeSchoolId,
+  })
+
+  const { data: pendingBuses = [] } = useQuery({
+    queryKey: ["pending-buses", activeSchoolId],
+    queryFn: () => getPendingBuses(activeSchoolId!),
+    enabled: !!activeSchoolId,
+  })
+
+  const { data: pendingRoutes = [] } = useQuery({
+    queryKey: ["pending-routes", activeSchoolId],
+    queryFn: () => getPendingRoutes(activeSchoolId!),
+    enabled: !!activeSchoolId,
+  })
+
+  const { data: pendingHostelRooms = [] } = useQuery({
+    queryKey: ["pending-hostel-rooms", activeSchoolId],
+    queryFn: () => getPendingHostelRooms(activeSchoolId!),
+    enabled: !!activeSchoolId,
+  })
+
   const today = new Date().toISOString().slice(0, 10)
+
+  const { data: attendanceSnapshot = [] } = useQuery({
+    queryKey: ["section-attendance-snapshot", activeSchoolId, today],
+    queryFn: () => getSectionAttendanceSnapshot(activeSchoolId!, today),
+    enabled: !!activeSchoolId,
+  })
+
+  const absentTodayCount = attendanceSnapshot.filter((r) => r.status === "absent").length
+
   const walkInsToday = leads.filter(
     (l) => l.created_at.startsWith(today) && l.lead_sources?.name?.toLowerCase().includes("walk"),
   ).length
@@ -118,9 +162,64 @@ export function VpDashboard() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Bus className="h-4 w-4" /> Fleet approvals
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{pendingBuses.length + pendingRoutes.length}</div>
+            <Button variant="link" className="h-auto p-0 text-xs" asChild>
+              <Link to="/transport?tab=approvals">Review buses/routes</Link>
+            </Button>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Home className="h-4 w-4" /> Room approvals
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{pendingHostelRooms.length}</div>
+            <Button variant="link" className="h-auto p-0 text-xs" asChild>
+              <Link to="/hostel?tab=approvals">Review rooms</Link>
+            </Button>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <CreditCard className="h-4 w-4" /> Fee plans
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{pendingFeePlans.length}</div>
+            <Button variant="link" className="h-auto p-0 text-xs" asChild>
+              <Link to="/finance/fee-approvals">Review fee plans</Link>
+            </Button>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <ClipboardCheck className="h-4 w-4" /> Absent today
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{absentTodayCount}</div>
+            <Button variant="link" className="h-auto p-0 text-xs" asChild>
+              <Link to="/attendance">View by class</Link>
+            </Button>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Quick links</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" asChild>
+              <Link to="/finance/fee-approvals"><CreditCard className="h-3 w-3 mr-1" /> Fee approvals</Link>
+            </Button>
             <Button size="sm" variant="outline" asChild>
               <Link to="/classes"><GraduationCap className="h-3 w-3 mr-1" /> Classes</Link>
             </Button>
@@ -142,6 +241,34 @@ export function VpDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {recentFeeNotifications.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Bell className="h-4 w-4" /> Recent fee due alerts
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2 text-sm">
+              {recentFeeNotifications.map((n) => (
+                <li key={n.id} className="flex flex-wrap items-baseline justify-between gap-2 border-b last:border-0 pb-2 last:pb-0">
+                  <span>
+                    {n.student_name ?? "Student"}
+                    {n.admission_no ? (
+                      <span className="text-muted-foreground font-mono ml-1">({n.admission_no})</span>
+                    ) : null}
+                    {n.amount != null ? ` · ₹${n.amount.toLocaleString()}` : null}
+                  </span>
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {format(new Date(n.created_at), "dd MMM yyyy, h:mm a")}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       <PrincipalDashboard
         title="Vice Principal Dashboard"

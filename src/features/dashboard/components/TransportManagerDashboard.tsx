@@ -5,8 +5,17 @@ import { Link } from "react-router-dom"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { GenericCardSkeleton } from "@/components/ui/card-skeleton"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { useAuth } from "@/features/auth/hooks/useAuth"
 import { getTransportDashboard } from "../api/dashboard.api"
+import { getAssignedTransportStudents } from "@/features/transport/api/transport.api"
 
 export function TransportManagerDashboard() {
   const activeSchoolId = useAuth((s) => s.activeSchoolId)
@@ -14,6 +23,12 @@ export function TransportManagerDashboard() {
   const { data, isLoading } = useQuery({
     queryKey: ["transport-dashboard", activeSchoolId],
     queryFn: () => getTransportDashboard(activeSchoolId!),
+    enabled: !!activeSchoolId,
+  })
+
+  const { data: assigned = [] } = useQuery({
+    queryKey: ["transport-assigned", activeSchoolId],
+    queryFn: () => getAssignedTransportStudents(activeSchoolId!),
     enabled: !!activeSchoolId,
   })
 
@@ -97,6 +112,47 @@ export function TransportManagerDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-lg">Students on school bus</CardTitle>
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/transport">View all</Link>
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {assigned.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No students assigned to routes yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Adm. no</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Class</TableHead>
+                  <TableHead>Route</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {assigned.slice(0, 8).map((row) => (
+                  <TableRow key={row.route_student_id}>
+                    <TableCell className="font-mono text-sm">{row.admission_no}</TableCell>
+                    <TableCell>{row.student_name}</TableCell>
+                    <TableCell>
+                      {row.class_name ?? "—"}
+                      {row.section_name ? ` – ${row.section_name}` : ""}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {row.route_code ? `${row.route_code} — ` : ""}
+                      {row.route_name}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

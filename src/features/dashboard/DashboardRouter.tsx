@@ -8,6 +8,8 @@ import { PlatformDashboard } from "./components/PlatformDashboard"
 import { StudentDashboard } from "./components/StudentDashboard"
 import { CounselorHomeDashboard } from "./components/CounselorHomeDashboard"
 import { TransportManagerDashboard } from "./components/TransportManagerDashboard"
+import { HeadAccountantDashboard } from "./components/HeadAccountantDashboard"
+import { HostelManagerDashboard } from "./components/HostelManagerDashboard"
 import { CrmManagerDashboard } from "./components/CrmManagerDashboard"
 import { FinanceOverview } from "@/features/finance/pages/FinanceOverview"
 import { StatCardSkeletonGrid } from "@/components/ui/card-skeleton"
@@ -33,6 +35,8 @@ export function DashboardRouter() {
     case "finance_admin":
     case "accountant":
       return <FinanceOverview embedded />
+    case "head_accountant":
+      return <HeadAccountantDashboard />
     case "principal":
     case "school_admin":
       return <PrincipalDashboard />
@@ -51,6 +55,8 @@ export function DashboardRouter() {
       return <PrincipalDashboard title="HR Dashboard" subtitle="Staff and school operations overview." />
     case "transport_manager":
       return <TransportManagerDashboard />
+    case "hostel_manager":
+      return <HostelManagerDashboard />
     case "parent":
       return <ParentDashboard />
     case "student":

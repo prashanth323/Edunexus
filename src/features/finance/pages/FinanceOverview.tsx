@@ -213,6 +213,7 @@ function FinanceOverviewMetricsSection({
 
 export function FinanceOverview({ embedded = false }: FinanceOverviewProps) {
   const activeSchoolId = useAuth((s) => s.activeSchoolId)
+  const activeRole = useAuth((s) => s.activeRole)
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
   const [paymentOpen, setPaymentOpen] = useState(false)
@@ -338,11 +339,19 @@ export function FinanceOverview({ embedded = false }: FinanceOverviewProps) {
             <DollarSign className="h-4 w-4" /> Fee Structures
           </Link>
         </Button>
-        <Button asChild variant="outline" size="sm" className="gap-2">
-          <Link to="/finance/pending-dues">
-            <AlertTriangle className="h-4 w-4" /> Pending Dues
-          </Link>
-        </Button>
+        {activeRole === "accountant" ? (
+          <Button asChild variant="outline" size="sm" className="gap-2">
+            <Link to="/finance/dues">
+              <AlertTriangle className="h-4 w-4" /> Fee dues & notify
+            </Link>
+          </Button>
+        ) : (
+          <Button asChild variant="outline" size="sm" className="gap-2">
+            <Link to="/finance/pending-dues">
+              <AlertTriangle className="h-4 w-4" /> Pending Dues
+            </Link>
+          </Button>
+        )}
       </div>
     </div>
   )

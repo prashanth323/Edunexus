@@ -2,6 +2,11 @@ import { create } from 'zustand'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { getUserProfile, listSchoolsBrief } from '../api/auth.api'
+import {
+  getActiveSchoolRoles,
+  pickPrimarySchoolRole,
+  type UserRoleRow,
+} from '../lib/schoolRoles'
 
 const ACTIVE_SCHOOL_STORAGE_KEY = 'edunexus_active_school_id'
 
@@ -15,6 +20,20 @@ export type InitializeAuthArg =
   /** Re-fetch profile + re-resolve school/role after DB updates (e.g. complete-profile). Bypasses hydrate short-circuit. */
   | { refreshProfile: true }
 
+function resolveSchoolAuth(
+  profile: { user_roles?: UserRoleRow[] } | null,
+  platformRole: string | null,
+  activeSchoolId: string | null,
+) {
+  const userRoles = (profile?.user_roles ?? []).filter(
+    (r: UserRoleRow) => r.school_id,
+  ) as UserRoleRow[]
+  const schoolRoles = platformRole ? [] : getActiveSchoolRoles(userRoles, activeSchoolId)
+  const primarySchoolRole = pickPrimarySchoolRole(schoolRoles)
+  const activeRole = platformRole ?? primarySchoolRole
+  return { schoolRoles, activeRole }
+}
+
 interface AuthState {
   session: Session | null
   user: User | null
@@ -22,7 +41,9 @@ interface AuthState {
   /** From profiles.platform_role — platform ops roles only. */
   platformRole: string | null
   activeSchoolId: string | null
-  /** Effective role for UI/RBAC: platform_role ?? school role for active school. */
+  /** All active school roles for the active school (union for RBAC). */
+  schoolRoles: string[]
+  /** Primary role for display: platform_role ?? highest-priority school role. */
   activeRole: string | null
   isLoading: boolean
   setSession: (session: Session | null) => void
@@ -36,6 +57,7 @@ export const useAuth = create<AuthState>((set, get) => ({
   profile: null,
   platformRole: null,
   activeSchoolId: null,
+  schoolRoles: [],
   activeRole: null,
   isLoading: true,
   
@@ -52,13 +74,12 @@ export const useAuth = create<AuthState>((set, get) => ({
       /* ignore */
     }
 
-    const roleObj = profile.user_roles?.find((r: { school_id: string }) => r.school_id === schoolId)
-    const schoolRole = roleObj?.role ?? null
-    const effective = platformRole ?? schoolRole
+    const { schoolRoles, activeRole } = resolveSchoolAuth(profile, platformRole, schoolId)
 
     set({
       activeSchoolId: schoolId,
-      activeRole: effective,
+      schoolRoles,
+      activeRole,
     })
   },
   
@@ -108,16 +129,9 @@ export const useAuth = create<AuthState>((set, get) => ({
             const platformRole = profile?.platform_role ?? null
 
             const userRoles = (profile?.user_roles ?? []).filter(
-              (r: { school_id: string | null }) => r.school_id,
-            )
+              (r: UserRoleRow) => r.school_id,
+            ) as UserRoleRow[]
             let activeSchoolId: string | null = userRoles[0]?.school_id ?? null
-            let schoolRole: string | null = userRoles[0]?.role ?? null
-
-            if (userRoles.length && activeSchoolId) {
-              schoolRole =
-                userRoles.find((r: { school_id: string }) => r.school_id === activeSchoolId)?.role ??
-                schoolRole
-            }
 
             if (!activeSchoolId && platformRole) {
               try {
@@ -132,7 +146,7 @@ export const useAuth = create<AuthState>((set, get) => ({
               const saved = localStorage.getItem(ACTIVE_SCHOOL_STORAGE_KEY)
               if (saved) {
                 const allowedFromRoles = new Set(
-                  (userRoles as { school_id: string }[]).map((r) => r.school_id),
+                  userRoles.map((r) => r.school_id!),
                 )
                 if (platformRole) {
                   const schools = await listSchoolsBrief().catch(() => [] as { id: string }[])
@@ -142,16 +156,13 @@ export const useAuth = create<AuthState>((set, get) => ({
                   }
                 } else if (allowedFromRoles.has(saved)) {
                   activeSchoolId = saved
-                  schoolRole =
-                    userRoles.find((r: { school_id: string }) => r.school_id === saved)?.role ??
-                    schoolRole
                 }
               }
             } catch {
               /* ignore */
             }
 
-            const resolvedRole = platformRole ?? schoolRole
+            const { schoolRoles, activeRole } = resolveSchoolAuth(profile, platformRole, activeSchoolId)
 
             set({
               session,
@@ -159,7 +170,8 @@ export const useAuth = create<AuthState>((set, get) => ({
               profile,
               platformRole,
               activeSchoolId,
-              activeRole: resolvedRole,
+              schoolRoles,
+              activeRole,
             })
           } catch (error) {
             console.error("Failed to load user profile:", error)
@@ -169,11 +181,20 @@ export const useAuth = create<AuthState>((set, get) => ({
               profile: null,
               platformRole: null,
               activeSchoolId: null,
+              schoolRoles: [],
               activeRole: null,
             })
           }
         } else {
-          set({ session: null, user: null, profile: null, platformRole: null, activeSchoolId: null, activeRole: null })
+          set({
+            session: null,
+            user: null,
+            profile: null,
+            platformRole: null,
+            activeSchoolId: null,
+            schoolRoles: [],
+            activeRole: null,
+          })
         }
       } catch (error) {
         console.error("Auth initialization error:", error)
@@ -206,6 +227,7 @@ supabase.auth.onAuthStateChange((event, session) => {
       profile: null,
       platformRole: null,
       activeSchoolId: null,
+      schoolRoles: [],
       activeRole: null,
       isLoading: false,
     })

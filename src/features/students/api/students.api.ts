@@ -64,6 +64,92 @@ function pickDisplayEnrollment(enrollments: unknown): {
   return chosen ? classSectionFromEnrollmentRow(chosen as { sections?: unknown }) : { classes: null, sections: null }
 }
 
+export async function getStudentsForClassTeacher(schoolId: string, profileId: string) {
+  const { data: staff, error: staffErr } = await supabase
+    .from("staff")
+    .select("id")
+    .eq("profile_id", profileId)
+    .eq("school_id", schoolId)
+    .maybeSingle()
+  if (staffErr) throw staffErr
+  if (!staff?.id) return [] as Student[]
+
+  const { data: sections, error: secErr } = await supabase
+    .from("sections")
+    .select("id")
+    .eq("class_teacher_id", staff.id)
+  if (secErr) throw secErr
+  const sectionIds = (sections ?? []).map((s) => s.id)
+  if (!sectionIds.length) return [] as Student[]
+
+  const { data, error } = await supabase
+    .from("enrollments")
+    .select(
+      `
+      roll_no,
+      status,
+      academic_years ( is_current ),
+      sections (
+        name,
+        classes ( name )
+      ),
+      students!inner (
+        id,
+        admission_no,
+        first_name,
+        last_name,
+        gender,
+        is_active,
+        deleted_at,
+        school_id
+      )
+    `,
+    )
+    .eq("school_id", schoolId)
+    .eq("status", "active")
+    .in("section_id", sectionIds)
+    .is("students.deleted_at", null)
+
+  if (error) throw error
+
+  const seen = new Set<string>()
+  const result: Student[] = []
+  for (const row of data ?? []) {
+    const stRaw = (row as { students?: unknown }).students
+    const st = Array.isArray(stRaw) ? stRaw[0] : stRaw
+    if (!st || typeof st !== "object" || !("id" in st)) continue
+    const id = String((st as { id: string }).id)
+    if (seen.has(id)) continue
+    const ayRaw = (row as { academic_years?: unknown }).academic_years
+    const ay = Array.isArray(ayRaw) ? ayRaw[0] : ayRaw
+    const isCurrent =
+      ay && typeof ay === "object" && "is_current" in ay ? !!(ay as { is_current?: boolean }).is_current : false
+    if (!isCurrent) continue
+    seen.add(id)
+    const { classes, sections: sec } = classSectionFromEnrollmentRow(row as { sections?: unknown })
+    const s = st as {
+      admission_no: string
+      first_name: string
+      last_name: string
+      gender: string | null
+      is_active: boolean
+    }
+    result.push({
+      id,
+      admission_no: s.admission_no,
+      roll_no: (row as { roll_no?: string | null }).roll_no ?? null,
+      first_name: s.first_name,
+      last_name: s.last_name,
+      gender: s.gender,
+      status: s.is_active ? "active" : "inactive",
+      classes,
+      sections: sec,
+    })
+  }
+
+  return result.sort((a, b) => a.first_name.localeCompare(b.first_name))
+}
+
 export async function getStudents(schoolId: string) {
   /**
    * Do not filter embedded `enrollments` with `.eq(...)` — in PostgREST that behaves like an inner join and

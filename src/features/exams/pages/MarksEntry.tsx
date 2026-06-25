@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/features/auth/hooks/useAuth"
+import { hasAnySchoolRole } from "@/features/auth/lib/schoolRoles"
 import {
   getExamWithDetails,
   getStudentsForSection,
@@ -33,16 +34,18 @@ export function MarksEntry() {
   const { examId } = useParams<{ examId: string }>()
   const activeSchoolId = useAuth((s) => s.activeSchoolId)
   const activeRole = useAuth((s) => s.activeRole)
+  const schoolRoles = useAuth((s) => s.schoolRoles)
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [marks, setMarks] = useState<MarkRow[]>([])
   const [saving, setSaving] = useState(false)
 
-  // Guard against non-staff roles
-  const canManage = !!(
-    activeRole &&
-    new Set(["principal", "school_admin", "teacher", "class_teacher", "vice_principal"]).has(activeRole)
-  )
+  const canManage =
+    hasAnySchoolRole(schoolRoles, ["teacher", "class_teacher"]) ||
+    !!(
+      activeRole &&
+      new Set(["principal", "school_admin", "vice_principal"]).has(activeRole)
+    )
 
   useEffect(() => {
     if (!canManage) {

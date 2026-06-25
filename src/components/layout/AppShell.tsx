@@ -20,7 +20,8 @@ import { Sidebar } from "./Sidebar"
 import { useAuth } from "@/features/auth/hooks/useAuth"
 import { listSchoolsBrief, signOut, type SchoolBrief } from "@/features/auth/api/auth.api"
 import { needsProfileOnboarding } from "@/features/auth/lib/onboarding"
-import { navLinksForRole } from "@/config/navigation"
+import { navLinksForRoles } from "@/config/navigation"
+import { formatDisplayRoleLabel } from "@/features/auth/lib/schoolRoles"
 import { cn } from "@/lib/utils"
 import { useStudentDocumentsDisplayUrl } from "@/features/students/hooks/useStudentDocumentsDisplayUrl"
 
@@ -30,7 +31,7 @@ export function AppShell() {
   const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
-  const { profile, user, activeRole, platformRole, activeSchoolId, setActiveSchool } = useAuth()
+  const { profile, user, activeRole, schoolRoles, platformRole, activeSchoolId, setActiveSchool } = useAuth()
 
   const needsOnboarding = needsProfileOnboarding({
     platformRole,
@@ -81,12 +82,7 @@ export function AppShell() {
     }
   }
 
-  const displayRole = activeRole
-    ? activeRole
-        .split("_")
-        .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(" ")
-    : "User"
+  const displayRole = formatDisplayRoleLabel(activeRole, schoolRoles)
 
   const initials =
     profile?.first_name && profile?.last_name
@@ -95,7 +91,7 @@ export function AppShell() {
 
   const showSchoolSwitcher = !!activeRole && activeRole !== "super_admin" && schoolOptions.length > 1
 
-  const mobileNavLinks = navLinksForRole(activeRole)
+  const mobileNavLinks = navLinksForRoles(schoolRoles, platformRole, activeRole)
 
   const headerAvatarUrl = useStudentDocumentsDisplayUrl(profile?.avatar_url)
 

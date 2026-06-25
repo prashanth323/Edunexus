@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { Calendar as CalendarIcon, CheckCircle2, Loader2, Save } from "lucide-react"
+import { Calendar as CalendarIcon, CheckCircle2, Loader2, Save, UserMinus } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -17,6 +17,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useAuth } from "@/features/auth/hooks/useAuth"
+import { hasClassTeacherCapabilities } from "@/features/auth/lib/schoolRoles"
+import { cn } from "@/lib/utils"
 import {
   getCurrentAcademicYearId,
   getDailyAttendanceForSectionDate,
@@ -27,15 +29,21 @@ import {
   type EnrolledStudentRow,
   type SectionOption,
 } from "../api/attendance.api"
+import { ATTENDANCE_STATUS_BADGE_CLASSES } from "../lib/dailyAttendanceRead"
 
-/** Stable defaults so useQuery fallbacks don't allocate new [] each render (breaks effects). */
 const EMPTY_SECTIONS: SectionOption[] = []
 const EMPTY_ROSTER: EnrolledStudentRow[] = []
-const EMPTY_EXISTING: { student_id: string; status: string }[] = []
+const EMPTY_EXISTING: { student_id: string; status: string; remarks: string | null }[] = []
+
+const RECEPTIONIST_STATUSES = new Set(["late", "half_day"])
+
+function isReceptionistStatus(status: string | undefined) {
+  return !!status && RECEPTIONIST_STATUSES.has(status)
+}
 
 export function AttendanceMarkingTeacherView() {
   const queryClient = useQueryClient()
-  const { user, activeSchoolId, activeRole } = useAuth()
+  const { user, activeSchoolId, schoolRoles } = useAuth()
   const [date, setDate] = useState<string>(new Date().toISOString().split("T")[0])
   const [sectionId, setSectionId] = useState<string | null>(null)
   const [attendanceMap, setAttendanceMap] = useState<Record<string, DailyAttendanceStatus>>({})
@@ -48,10 +56,10 @@ export function AttendanceMarkingTeacherView() {
   })
 
   const { data: sectionsData, isLoading: sectionsLoading } = useQuery({
-    queryKey: ["sections-year", activeSchoolId, academicYearId, activeRole, user?.id],
+    queryKey: ["sections-year", activeSchoolId, academicYearId, schoolRoles, user?.id],
     queryFn: async () => {
       const all = await getSectionsForYear(activeSchoolId!, academicYearId!)
-      if (activeRole !== "class_teacher" || !user?.id) return all
+      if (!hasClassTeacherCapabilities(schoolRoles) || !user?.id) return all
       const { supabase } = await import("@/lib/supabase")
       const { data: staff } = await supabase
         .from("staff")
@@ -93,6 +101,22 @@ export function AttendanceMarkingTeacherView() {
   })
   const existingRows = existingRowsData ?? EMPTY_EXISTING
 
+  const remarksByStudent = useMemo(() => {
+    const map: Record<string, string | null> = {}
+    for (const row of existingRows) {
+      map[row.student_id] = row.remarks
+    }
+    return map
+  }, [existingRows])
+
+  const receptionistLocked = useMemo(() => {
+    const set = new Set<string>()
+    for (const row of existingRows) {
+      if (isReceptionistStatus(row.status)) set.add(row.student_id)
+    }
+    return set
+  }, [existingRows])
+
   useEffect(() => {
     if (!roster.length) {
       setAttendanceMap({})
@@ -102,7 +126,9 @@ export function AttendanceMarkingTeacherView() {
     for (const s of roster) {
       const hit = existingRows.find((r) => r.student_id === s.id)
       const st = hit?.status
-      if (st === "present" || st === "absent" || st === "late" || st === "half_day") {
+      if (isReceptionistStatus(st)) {
+        next[s.id] = st as DailyAttendanceStatus
+      } else if (st === "present" || st === "absent") {
         next[s.id] = st
       } else if (st === "excused" || st === "holiday") {
         next[s.id] = "present"
@@ -113,7 +139,13 @@ export function AttendanceMarkingTeacherView() {
     setAttendanceMap(next)
   }, [roster, existingRows])
 
+  const getEffectiveStatus = (studentId: string): DailyAttendanceStatus => {
+    return attendanceMap[studentId] ?? "present"
+  }
+
   const handleStatusChange = (studentId: string, status: DailyAttendanceStatus) => {
+    if (receptionistLocked.has(studentId)) return
+    if (status !== "present" && status !== "absent") return
     setAttendanceMap((prev) => ({ ...prev, [studentId]: status }))
   }
 
@@ -121,7 +153,9 @@ export function AttendanceMarkingTeacherView() {
     setAttendanceMap((prev) => {
       const next = { ...prev }
       roster.forEach((s) => {
-        next[s.id] = status
+        if (!receptionistLocked.has(s.id)) {
+          next[s.id] = status
+        }
       })
       return next
     })
@@ -134,16 +168,20 @@ export function AttendanceMarkingTeacherView() {
     }
     setIsSubmitting(true)
     try {
-      const rows = roster.map((s) => ({
-        school_id: activeSchoolId,
-        student_id: s.id,
-        section_id: sectionId,
-        academic_year_id: academicYearId,
-        date,
-        status: attendanceMap[s.id] ?? "present",
-        marked_by: user.id,
-      }))
-      await upsertDailyAttendanceBatch(rows)
+      const rows = roster
+        .filter((s) => !receptionistLocked.has(s.id))
+        .map((s) => ({
+          school_id: activeSchoolId,
+          student_id: s.id,
+          section_id: sectionId,
+          academic_year_id: academicYearId,
+          date,
+          status: attendanceMap[s.id] ?? "present",
+          marked_by: user.id,
+        }))
+      if (rows.length > 0) {
+        await upsertDailyAttendanceBatch(rows)
+      }
       await queryClient.invalidateQueries({
         queryKey: ["attendance-existing", activeSchoolId, sectionId, date],
       })
@@ -157,14 +195,24 @@ export function AttendanceMarkingTeacherView() {
   }
 
   const stats = useMemo(() => {
-    const vals = Object.values(attendanceMap)
+    const vals = roster.map((s) => getEffectiveStatus(s.id))
     return {
       present: vals.filter((v) => v === "present").length,
       absent: vals.filter((v) => v === "absent").length,
       late: vals.filter((v) => v === "late").length,
       half: vals.filter((v) => v === "half_day").length,
     }
-  }, [attendanceMap])
+  }, [roster, attendanceMap])
+
+  const absentToday = useMemo(
+    () =>
+      roster.filter((s) => getEffectiveStatus(s.id) === "absent").sort((a, b) => {
+        const ra = a.roll_number ?? ""
+        const rb = b.roll_number ?? ""
+        return ra.localeCompare(rb, undefined, { numeric: true })
+      }),
+    [roster, attendanceMap],
+  )
 
   const sectionLoading = yearLoading || sectionsLoading
   const tableLoading = rosterLoading || existingLoading
@@ -182,7 +230,7 @@ export function AttendanceMarkingTeacherView() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Daily Attendance</h1>
         <p className="text-muted-foreground mt-1">
-          Mark attendance for a section and date. Data is stored per student per day.
+          Mark present or absent for your section. Late and half-day are marked by reception.
         </p>
       </div>
 
@@ -244,6 +292,31 @@ export function AttendanceMarkingTeacherView() {
             )}
 
             <div className="pt-4 border-t space-y-2">
+              <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                <UserMinus className="h-3.5 w-3.5" />
+                Absent today
+              </h4>
+              {tableLoading ? (
+                <p className="text-xs text-muted-foreground">Loading…</p>
+              ) : absentToday.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No absent students.</p>
+              ) : (
+                <ul className="text-sm space-y-1 max-h-40 overflow-y-auto">
+                  {absentToday.map((s) => (
+                    <li key={s.id} className="flex gap-2">
+                      <span className="font-mono text-muted-foreground w-8 shrink-0">
+                        {s.roll_number ?? "—"}
+                      </span>
+                      <span>
+                        {s.first_name} {s.last_name}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="pt-4 border-t space-y-2">
               <h4 className="text-sm font-medium text-muted-foreground">Quick stats</h4>
               <div className="flex justify-between items-center text-sm">
                 <span>Present</span>
@@ -290,7 +363,7 @@ export function AttendanceMarkingTeacherView() {
           </CardHeader>
           <CardContent>
             {tableLoading ? (
-              <TableSkeletonRows rows={6} cols={3} />
+              <TableSkeletonRows rows={6} cols={4} />
             ) : !roster.length ? (
               <p className="text-sm text-muted-foreground py-8 text-center">
                 No active students in this section for the current academic year.
@@ -302,74 +375,72 @@ export function AttendanceMarkingTeacherView() {
                     <TableRow>
                       <TableHead className="w-[100px]">Roll No.</TableHead>
                       <TableHead>Student name</TableHead>
-                      <TableHead className="text-center min-w-[280px]">Status</TableHead>
+                      <TableHead className="text-center min-w-[200px]">Status</TableHead>
+                      <TableHead className="min-w-[160px]">Remarks</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {roster.map((student) => (
-                      <TableRow key={student.id}>
-                        <TableCell className="font-medium">
-                          {student.roll_number ?? "—"}
-                        </TableCell>
-                        <TableCell>
-                          {student.first_name} {student.last_name}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex justify-center flex-wrap gap-2">
-                            <Button
-                              size="sm"
-                              type="button"
-                              variant={
-                                attendanceMap[student.id] === "present" ? "default" : "outline"
-                              }
-                              className={
-                                attendanceMap[student.id] === "present"
-                                  ? "bg-green-600 hover:bg-green-700"
-                                  : ""
-                              }
-                              onClick={() => handleStatusChange(student.id, "present")}
-                            >
-                              Present
-                            </Button>
-                            <Button
-                              size="sm"
-                              type="button"
-                              variant={
-                                attendanceMap[student.id] === "absent" ? "destructive" : "outline"
-                              }
-                              onClick={() => handleStatusChange(student.id, "absent")}
-                            >
-                              Absent
-                            </Button>
-                            <Button
-                              size="sm"
-                              type="button"
-                              variant={
-                                attendanceMap[student.id] === "late" ? "secondary" : "outline"
-                              }
-                              className={
-                                attendanceMap[student.id] === "late"
-                                  ? "bg-yellow-500 hover:bg-yellow-600 text-white"
-                                  : ""
-                              }
-                              onClick={() => handleStatusChange(student.id, "late")}
-                            >
-                              Late
-                            </Button>
-                            <Button
-                              size="sm"
-                              type="button"
-                              variant={
-                                attendanceMap[student.id] === "half_day" ? "secondary" : "outline"
-                              }
-                              onClick={() => handleStatusChange(student.id, "half_day")}
-                            >
-                              Half day
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {roster.map((student) => {
+                      const status = getEffectiveStatus(student.id)
+                      const locked = receptionistLocked.has(student.id)
+                      const showRemarks = status === "late" || status === "half_day"
+                      const remarks = remarksByStudent[student.id]
+
+                      return (
+                        <TableRow
+                          key={student.id}
+                          className={cn(
+                            status === "absent" && "bg-destructive/5",
+                            status === "late" && "bg-yellow-500/10",
+                            status === "half_day" && "bg-muted/50",
+                          )}
+                        >
+                          <TableCell className="font-medium">
+                            {student.roll_number ?? "—"}
+                          </TableCell>
+                          <TableCell>
+                            {student.first_name} {student.last_name}
+                          </TableCell>
+                          <TableCell>
+                            {locked ? (
+                              <div className="flex justify-center">
+                                <Badge
+                                  className={`capitalize ${ATTENDANCE_STATUS_BADGE_CLASSES[status] ?? ""}`}
+                                >
+                                  {status.replace(/_/g, " ")}
+                                </Badge>
+                                <span className="sr-only">Marked by reception</span>
+                              </div>
+                            ) : (
+                              <div className="flex justify-center flex-wrap gap-2">
+                                <Button
+                                  size="sm"
+                                  type="button"
+                                  variant={status === "present" ? "default" : "outline"}
+                                  className={
+                                    status === "present" ? "bg-green-600 hover:bg-green-700" : ""
+                                  }
+                                  onClick={() => handleStatusChange(student.id, "present")}
+                                >
+                                  Present
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  type="button"
+                                  variant={status === "absent" ? "destructive" : "outline"}
+                                  onClick={() => handleStatusChange(student.id, "absent")}
+                                >
+                                  Absent
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {showRemarks && remarks ? remarks : showRemarks ? "—" : ""}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
               </div>

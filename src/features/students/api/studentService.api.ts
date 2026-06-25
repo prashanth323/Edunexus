@@ -20,73 +20,50 @@ export type StudentServiceLookup = PendingServiceStudent & {
   route_name: string | null
   has_hostel_allocation: boolean
   has_route_assignment: boolean
+  hostel_allocation_id: string | null
+  hostel_room_id: string | null
+  route_student_id: string | null
+  route_id: string | null
+  section_id: string | null
+  academic_year_id: string | null
 }
 
-export async function getPendingHostelStudents(schoolId: string) {
-  const { data, error } = await supabase
-    .from("v_students_pending_hostel")
-    .select("*")
-    .eq("school_id", schoolId)
-    .order("admission_no")
+const STUDENT_SERVICE_SELECT = `
+  id,
+  school_id,
+  admission_no,
+  first_name,
+  last_name,
+  email,
+  transport_mode,
+  enrollments (
+    status,
+    section_id,
+    academic_year_id,
+    academic_years ( is_current ),
+    sections ( name, classes ( name ) )
+  ),
+  student_parents (
+    is_primary,
+    parents ( phone, email )
+  ),
+  hostel_allocations (
+    id,
+    room_id,
+    is_active,
+    academic_years ( is_current ),
+    hostel_rooms ( room_no, block )
+  ),
+  route_students (
+    id,
+    route_id,
+    is_active,
+    academic_years ( is_current ),
+    routes ( name )
+  )
+`
 
-  if (error) throw error
-  return (data ?? []) as PendingServiceStudent[]
-}
-
-export async function getPendingTransportStudents(schoolId: string) {
-  const { data, error } = await supabase
-    .from("v_students_pending_transport")
-    .select("*")
-    .eq("school_id", schoolId)
-    .order("admission_no")
-
-  if (error) throw error
-  return (data ?? []) as PendingServiceStudent[]
-}
-
-export async function getStudentServiceByAdmissionNo(
-  schoolId: string,
-  admissionNo: string,
-): Promise<StudentServiceLookup> {
-  const { data: student, error } = await supabase
-    .from("students")
-    .select(`
-      id,
-      school_id,
-      admission_no,
-      first_name,
-      last_name,
-      email,
-      transport_mode,
-      enrollments (
-        status,
-        academic_years ( is_current ),
-        sections ( name, classes ( name ) )
-      ),
-      student_parents (
-        is_primary,
-        parents ( phone, email )
-      ),
-      hostel_allocations (
-        is_active,
-        academic_years ( is_current ),
-        hostel_rooms ( room_no, block )
-      ),
-      route_students (
-        is_active,
-        academic_years ( is_current ),
-        routes ( name )
-      )
-    `)
-    .eq("school_id", schoolId)
-    .eq("admission_no", admissionNo.trim())
-    .eq("is_active", true)
-    .is("deleted_at", null)
-    .maybeSingle()
-
-  if (error) throw error
-  if (!student) throw new Error("No student found with this admission number")
-
+function mapStudentServiceRow(student: Record<string, unknown>): StudentServiceLookup {
   const enrollments = Array.isArray(student.enrollments) ? student.enrollments : []
   const activeEnr =
     enrollments.find((e: { status?: string; academic_years?: { is_current?: boolean } | { is_current?: boolean }[] }) => {
@@ -118,10 +95,10 @@ export async function getStudentServiceByAdmissionNo(
       const ay = Array.isArray(h.academic_years) ? h.academic_years[0] : h.academic_years
       return h.is_active && ay?.is_current
     },
-  )
+  ) as { id?: string; room_id?: string; hostel_rooms?: unknown } | undefined
   const roomRaw =
     activeHostel && typeof activeHostel === "object" && "hostel_rooms" in activeHostel
-      ? (activeHostel as { hostel_rooms?: unknown }).hostel_rooms
+      ? activeHostel.hostel_rooms
       : null
   const room = Array.isArray(roomRaw) ? roomRaw[0] : roomRaw
 
@@ -131,10 +108,10 @@ export async function getStudentServiceByAdmissionNo(
       const ay = Array.isArray(r.academic_years) ? r.academic_years[0] : r.academic_years
       return r.is_active && ay?.is_current
     },
-  )
+  ) as { id?: string; route_id?: string; routes?: unknown } | undefined
   const routeRaw =
     activeRoute && typeof activeRoute === "object" && "routes" in activeRoute
-      ? (activeRoute as { routes?: unknown }).routes
+      ? activeRoute.routes
       : null
   const route = Array.isArray(routeRaw) ? routeRaw[0] : routeRaw
 
@@ -143,12 +120,12 @@ export async function getStudentServiceByAdmissionNo(
   const parObj = par && typeof par === "object" ? (par as Record<string, unknown>) : null
 
   return {
-    id: student.id as string,
-    student_id: student.id as string,
-    school_id: student.school_id as string,
-    admission_no: student.admission_no as string,
-    first_name: student.first_name as string,
-    last_name: student.last_name as string,
+    id: String(student.id),
+    student_id: String(student.id),
+    school_id: String(student.school_id),
+    admission_no: String(student.admission_no),
+    first_name: String(student.first_name),
+    last_name: String(student.last_name),
     email: (student.email as string | null) ?? null,
     transport_mode: (student.transport_mode as string) ?? "self",
     class_name: cl && typeof cl === "object" && "name" in cl ? String(cl.name) : null,
@@ -161,7 +138,74 @@ export async function getStudentServiceByAdmissionNo(
     route_name: routeObj?.name ? String(routeObj.name) : null,
     has_hostel_allocation: !!activeHostel,
     has_route_assignment: !!activeRoute,
+    hostel_allocation_id: activeHostel?.id ? String(activeHostel.id) : null,
+    hostel_room_id: activeHostel?.room_id ? String(activeHostel.room_id) : null,
+    route_student_id: activeRoute?.id ? String(activeRoute.id) : null,
+    route_id: activeRoute?.route_id ? String(activeRoute.route_id) : null,
+    section_id:
+      activeEnr && typeof activeEnr === "object" && "section_id" in activeEnr
+        ? String((activeEnr as { section_id?: string }).section_id ?? "")
+        : null,
+    academic_year_id:
+      activeEnr && typeof activeEnr === "object" && "academic_year_id" in activeEnr
+        ? String((activeEnr as { academic_year_id?: string }).academic_year_id ?? "")
+        : null,
   }
+}
+
+export async function getPendingHostelStudents(schoolId: string) {
+  const { data, error } = await supabase
+    .from("v_students_pending_hostel")
+    .select("*")
+    .eq("school_id", schoolId)
+    .order("admission_no")
+
+  if (error) throw error
+  return (data ?? []) as PendingServiceStudent[]
+}
+
+export async function getPendingTransportStudents(schoolId: string) {
+  const { data, error } = await supabase
+    .from("v_students_pending_transport")
+    .select("*")
+    .eq("school_id", schoolId)
+    .order("admission_no")
+
+  if (error) throw error
+  return (data ?? []) as PendingServiceStudent[]
+}
+
+export async function getStudentServiceDetails(studentId: string): Promise<StudentServiceLookup> {
+  const { data: student, error } = await supabase
+    .from("students")
+    .select(STUDENT_SERVICE_SELECT)
+    .eq("id", studentId)
+    .is("deleted_at", null)
+    .maybeSingle()
+
+  if (error) throw error
+  if (!student) throw new Error("Student not found")
+
+  return mapStudentServiceRow(student as Record<string, unknown>)
+}
+
+export async function getStudentServiceByAdmissionNo(
+  schoolId: string,
+  admissionNo: string,
+): Promise<StudentServiceLookup> {
+  const { data: student, error } = await supabase
+    .from("students")
+    .select(STUDENT_SERVICE_SELECT)
+    .eq("school_id", schoolId)
+    .eq("admission_no", admissionNo.trim())
+    .eq("is_active", true)
+    .is("deleted_at", null)
+    .maybeSingle()
+
+  if (error) throw error
+  if (!student) throw new Error("No student found with this admission number")
+
+  return mapStudentServiceRow(student as Record<string, unknown>)
 }
 
 export async function updateStudentServicePreference(
@@ -180,6 +224,20 @@ export type ClassTeacherInfo = {
   class_teacher_name: string | null
   class_teacher_phone: string | null
   class_teacher_email: string | null
+}
+
+export type CanEditStudentDetails = {
+  allowed: boolean
+}
+
+export async function canEditStudentDetails(studentId: string): Promise<CanEditStudentDetails> {
+  const { data, error } = await supabase.rpc("can_edit_student_details", {
+    p_student_id: studentId,
+  })
+  if (error) throw error
+  if (!data || typeof data !== "object") return { allowed: false }
+  const d = data as Record<string, unknown>
+  return { allowed: d.allowed === true }
 }
 
 export async function getStudentClassTeacher(studentId: string): Promise<ClassTeacherInfo | null> {

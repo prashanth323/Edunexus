@@ -7,10 +7,16 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { useAuth } from "@/features/auth/hooks/useAuth"
 import {
   getStudentForPortalLoginByAdmissionNo,
   type StudentPortalLoginLookup,
 } from "@/features/students/api/students.api"
+import {
+  canViewPortalCredentials,
+  getStudentPortalCredentialsByAdmission,
+} from "@/features/students/api/portalCredentials.api"
+import { CredentialsBody } from "@/features/students/components/StudentPortalCredentialsPanel"
 
 type Props = {
   schoolId: string
@@ -27,6 +33,8 @@ export function AdmissionNumberLoginPanel({
   onInvite,
   compact,
 }: Props) {
+  const activeRole = useAuth((s) => s.activeRole)
+  const showCredentials = canViewPortalCredentials(activeRole)
   const [query, setQuery] = useState(initialAdmissionNo)
   const [searchNo, setSearchNo] = useState(initialAdmissionNo)
 
@@ -41,6 +49,13 @@ export function AdmissionNumberLoginPanel({
     queryKey: ["student-login-lookup", schoolId, searchNo],
     queryFn: () => getStudentForPortalLoginByAdmissionNo(schoolId, searchNo),
     enabled: !!schoolId && searchNo.trim().length >= 3,
+    retry: false,
+  })
+
+  const { data: credentials, isFetching: credsLoading } = useQuery({
+    queryKey: ["student-portal-credentials-adm", schoolId, searchNo],
+    queryFn: () => getStudentPortalCredentialsByAdmission(schoolId, searchNo),
+    enabled: showCredentials && !!schoolId && searchNo.trim().length >= 3 && !!student,
     retry: false,
   })
 
@@ -81,7 +96,8 @@ export function AdmissionNumberLoginPanel({
           Send portal login by admission number
         </CardTitle>
         <CardDescription>
-          Type or paste the admission number to load student and parent emails automatically.
+          Type or paste the admission number to load student and parent details
+          {showCredentials ? " and portal login credentials" : ""}.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -129,19 +145,35 @@ export function AdmissionNumberLoginPanel({
               )}
             </div>
             <div className="grid sm:grid-cols-2 gap-2 text-sm">
-              <p>
-                <span className="text-muted-foreground">Student email:</span>{" "}
-                {student.email ?? "—"}
-              </p>
-              <p>
-                <span className="text-muted-foreground">Parent email:</span>{" "}
-                {student.parentEmail ?? "—"}
-              </p>
+              {!showCredentials && (
+                <>
+                  <p>
+                    <span className="text-muted-foreground">Student email:</span>{" "}
+                    {student.email ?? "—"}
+                  </p>
+                  <p>
+                    <span className="text-muted-foreground">Parent email:</span>{" "}
+                    {student.parentEmail ?? "—"}
+                  </p>
+                </>
+              )}
               <p>
                 <span className="text-muted-foreground">Parent phone:</span>{" "}
                 {student.parentPhone ?? "—"}
               </p>
             </div>
+
+            {showCredentials && (
+              <div className="pt-2 border-t">
+                {credsLoading ? (
+                  <p className="text-sm text-muted-foreground flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading credentials…
+                  </p>
+                ) : credentials ? (
+                  <CredentialsBody data={credentials} />
+                ) : null}
+              </div>
+            )}
             {!student.hasPortalLogin && (
               <div className="flex flex-wrap gap-2">
                 {onInvite ? (
