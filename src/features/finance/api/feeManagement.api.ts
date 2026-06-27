@@ -17,6 +17,8 @@ export type FeeStructure = {
   term_label: string | null
   class_fee_plan_id: string | null
   approval_status: string | null
+  fee_category: string | null
+  custom_label: string | null
   classes?: { name: string } | null
 }
 
@@ -76,7 +78,7 @@ export async function getFeeStructures(schoolId: string) {
   const { data, error } = await supabase
     .from("fee_structures")
     .select(
-      "id, school_id, name, amount, frequency, due_day, late_fine_per_day, description, is_active, created_at, class_id, term_order, term_label, class_fee_plan_id, approval_status, classes ( name )",
+      "id, school_id, name, amount, frequency, due_day, late_fine_per_day, description, is_active, created_at, class_id, term_order, term_label, class_fee_plan_id, approval_status, fee_category, custom_label, classes ( name )",
     )
     .eq("school_id", schoolId)
     .eq("is_active", true)
@@ -208,23 +210,49 @@ export type RecordPaymentInput = {
 }
 
 export async function recordPayment(schoolId: string, input: RecordPaymentInput) {
+  const prefix = `RCP-${new Date().getFullYear()}`
+  const { count } = await supabase
+    .from("payments")
+    .select("id", { count: "exact", head: true })
+    .eq("school_id", schoolId)
+
+  const receiptNo = `${prefix}-${String((count ?? 0) + 1).padStart(5, "0")}`
+
+  const methodMap: Record<string, string> = {
+    cash: "cash",
+    upi: "upi",
+    bank: "bank_transfer",
+    bank_transfer: "bank_transfer",
+    cheque: "cheque",
+    card: "card",
+  }
+  const method = methodMap[input.method] ?? input.method
+
   const { data, error } = await supabase
     .from("payments")
     .insert({
       school_id: schoolId,
       student_id: input.studentId,
       invoice_id: input.invoiceId,
+      receipt_no: receiptNo,
       amount: input.amount,
-      method: input.method,
+      method,
       transaction_ref: input.transactionRef || null,
       notes: input.notes || null,
-      payment_date: new Date().toISOString().slice(0, 10),
     })
     .select()
     .single()
   if (error) throw error
   return data
 }
+
+export const FEE_STATUS_QUERY_KEYS = [
+  "pending-dues",
+  "overdue-dues",
+  "finance",
+  "student-fee-status",
+  "children-invoices",
+] as const
 
 // ── Discounts ───────────────────────────────────────────
 export async function applyDiscount(invoiceId: string, discountAmount: number, _reason: string) {
@@ -321,4 +349,98 @@ export async function getPendingDuesReport(schoolId: string): Promise<PendingDue
   }
 
   return Array.from(studentMap.values()).sort((a, b) => b.total_due - a.total_due)
+}
+
+// ── Overdue dues (due_date <= today) ────────────────────
+export type OverdueFeeLine = {
+  invoice_id: string
+  invoice_no: string
+  name: string
+  amount: number
+  due_date: string
+  category: string
+  term_label: string | null
+}
+
+export type OverdueDueRow = {
+  student_id: string
+  student_name: string
+  admission_no: string
+  class_name: string
+  section_name: string
+  parent_email: string | null
+  total_due: number
+  last_due_date: string
+  lines: OverdueFeeLine[]
+}
+
+export async function getOverdueFeeDues(schoolId: string): Promise<OverdueDueRow[]> {
+  const { data, error } = await supabase.rpc("get_overdue_fee_dues", { p_school_id: schoolId })
+  if (error) throw error
+  return (data ?? []).map((row: Record<string, unknown>) => ({
+    student_id: String(row.student_id),
+    student_name: String(row.student_name ?? ""),
+    admission_no: String(row.admission_no ?? ""),
+    class_name: String(row.class_name ?? "N/A"),
+    section_name: String(row.section_name ?? "N/A"),
+    parent_email: row.parent_email ? String(row.parent_email) : null,
+    total_due: Number(row.total_due ?? 0),
+    last_due_date: String(row.last_due_date ?? ""),
+    lines: (Array.isArray(row.lines) ? row.lines : []) as OverdueFeeLine[],
+  }))
+}
+
+export async function getOverdueFeeDuesCount(schoolId: string): Promise<number> {
+  const rows = await getOverdueFeeDues(schoolId)
+  return rows.length
+}
+
+// ── Student fee payment status ────────────────────────────
+export type StudentFeeInvoice = {
+  id: string
+  invoice_no: string
+  description: string | null
+  amount: number
+  paid_amount: number
+  due_amount: number
+  status: string
+  due_date: string
+  fee_name: string | null
+  fee_category: string | null
+  term_label: string | null
+}
+
+export type StudentFeePaymentStatusData = {
+  student_id: string
+  admission_no: string
+  full_name: string
+  class_name: string
+  section_name: string
+  parent_email: string | null
+  invoices: StudentFeeInvoice[]
+  total_paid: number
+  total_due: number
+  overall_status: "clear" | "partial" | "overdue"
+}
+
+export async function getStudentFeePaymentStatus(
+  studentId: string,
+): Promise<StudentFeePaymentStatusData> {
+  const { data, error } = await supabase.rpc("get_student_fee_payment_status", {
+    p_student_id: studentId,
+  })
+  if (error) throw error
+  const row = data as Record<string, unknown>
+  return {
+    student_id: String(row.student_id),
+    admission_no: String(row.admission_no ?? ""),
+    full_name: String(row.full_name ?? ""),
+    class_name: String(row.class_name ?? "N/A"),
+    section_name: String(row.section_name ?? "N/A"),
+    parent_email: row.parent_email ? String(row.parent_email) : null,
+    invoices: (Array.isArray(row.invoices) ? row.invoices : []) as StudentFeeInvoice[],
+    total_paid: Number(row.total_paid ?? 0),
+    total_due: Number(row.total_due ?? 0),
+    overall_status: (row.overall_status as StudentFeePaymentStatusData["overall_status"]) ?? "clear",
+  }
 }

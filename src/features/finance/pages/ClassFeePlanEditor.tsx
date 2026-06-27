@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Link } from "react-router-dom"
+import { Link, useSearchParams } from "react-router-dom"
 import { AlertCircle, Loader2, Plus, Send, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -13,33 +13,66 @@ import { useAuth } from "@/features/auth/hooks/useAuth"
 import { getClassesForSchool } from "@/features/admissions/api/admissions.api"
 import {
   createClassFeePlan,
+  deleteClassFeePlan,
   deleteFeePlanTerm,
   getClassFeePlans,
   getFeePlanWithTerms,
   submitClassFeePlan,
   upsertFeePlanTerm,
   type FeePlanTerm,
+  type FeePlanItemInput,
 } from "../api/feePlans.api"
+import { FEE_CATEGORIES, feeCategoryLabel, feeItemDisplayName, type FeeCategory } from "../lib/feeCategories"
 import { supabase } from "@/lib/supabase"
+
+type TermItemDraft = {
+  fee_category: FeeCategory
+  custom_label: string
+  amount: number
+}
 
 type TermDraft = {
   id?: string
   term_order: number
   term_label: string
   due_date: string
-  items: { name: string; amount: number }[]
+  items: TermItemDraft[]
 }
+
+type PlanTab = "drafts" | "pending" | "approved"
 
 function validateTermsForSubmit(terms: TermDraft[]): string | null {
   if (!terms.length) return "Add at least one term before submitting."
   for (const t of terms) {
     if (!t.due_date.trim()) return `Set a due date for ${t.term_label || "each term"}.`
-    const validItems = t.items.filter((i) => i.name.trim() && i.amount > 0)
+    const validItems = t.items.filter((i) => i.amount > 0)
     if (!validItems.length) {
       return `Add fee line items with amounts for ${t.term_label || "each term"}.`
     }
+    for (const item of validItems) {
+      if (item.fee_category === "other" && !item.custom_label.trim()) {
+        return `Enter a label for "Other" fee in ${t.term_label}.`
+      }
+    }
   }
   return null
+}
+
+function itemsToInput(items: TermItemDraft[]): FeePlanItemInput[] {
+  return items.map((i) => ({
+    fee_category: i.fee_category,
+    custom_label: i.fee_category === "other" ? i.custom_label : null,
+    amount: i.amount,
+  }))
+}
+
+function mapLoadedItem(item: { fee_category?: string; custom_label?: string | null; name?: string; amount: number }): TermItemDraft {
+  const cat = (item.fee_category as FeeCategory) || "tuition"
+  return {
+    fee_category: cat,
+    custom_label: item.custom_label ?? (cat === "other" ? item.name ?? "" : ""),
+    amount: Number(item.amount),
+  }
 }
 
 export function ClassFeePlanEditor() {
@@ -80,6 +113,22 @@ export function ClassFeePlanEditor() {
     enabled: !!activeSchoolId,
   })
 
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeTab = (searchParams.get("tab") as PlanTab) || "drafts"
+
+  const setTab = (tab: PlanTab) => setSearchParams({ tab })
+
+  const filteredPlans = useMemo(() => {
+    switch (activeTab) {
+      case "pending":
+        return plans.filter((p) => p.status === "pending_vp")
+      case "approved":
+        return plans.filter((p) => p.status === "approved" || p.status === "superseded")
+      default:
+        return plans.filter((p) => p.status === "draft" || p.status === "rejected")
+    }
+  }, [plans, activeTab])
+
   const selectedPlan = useMemo(
     () => plans.find((p) => p.id === selectedPlanId) ?? null,
     [plans, selectedPlanId],
@@ -95,7 +144,7 @@ export function ClassFeePlanEditor() {
           term_order: t.term_order,
           term_label: t.term_label,
           due_date: t.due_date ?? "",
-          items: (t.items ?? []).map((i) => ({ name: i.name, amount: Number(i.amount) })),
+          items: (t.items ?? []).map(mapLoadedItem),
         })),
       )
       return loaded
@@ -103,11 +152,29 @@ export function ClassFeePlanEditor() {
     enabled: !!selectedPlanId,
   })
 
+  const deletePlanMut = useMutation({
+    mutationFn: (planId: string) => deleteClassFeePlan(planId),
+    onSuccess: () => {
+      toast.success("Draft plan deleted")
+      setSelectedPlanId(null)
+      setTerms([])
+      qc.invalidateQueries({ queryKey: ["class-fee-plans", activeSchoolId] })
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
   const createMut = useMutation({
     mutationFn: async () => {
       if (!activeSchoolId || !academicYear?.id || !newClassId) throw new Error("Select a class")
       const id = await createClassFeePlan(activeSchoolId, academicYear.id, newClassId)
-      setTerms([{ term_order: 1, term_label: "Term 1", due_date: "", items: [{ name: "Tuition", amount: 0 }] }])
+      setTerms([
+        {
+          term_order: 1,
+          term_label: "Term 1",
+          due_date: "",
+          items: [{ fee_category: "tuition", custom_label: "", amount: 0 }],
+        },
+      ])
       return id
     },
     onSuccess: (id) => {
@@ -131,7 +198,7 @@ export function ClassFeePlanEditor() {
             term_label: t.term_label,
             due_date: t.due_date || null,
           },
-          t.items.filter((i) => i.name.trim()),
+          itemsToInput(t.items.filter((i) => i.amount > 0 || i.fee_category)),
         )
       }
     },
@@ -156,7 +223,7 @@ export function ClassFeePlanEditor() {
             term_label: t.term_label,
             due_date: t.due_date || null,
           },
-          t.items.filter((i) => i.name.trim() && i.amount > 0),
+          itemsToInput(t.items.filter((i) => i.amount > 0)),
         )
       }
       await submitClassFeePlan(selectedPlanId)
@@ -210,10 +277,29 @@ export function ClassFeePlanEditor() {
         <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle className="text-lg">Plans</CardTitle>
-            <CardDescription>One plan per class per academic year</CardDescription>
+            <CardDescription>Drafts for VP approval — not the same as fee structures</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {canWrite && (
+            <div className="flex flex-wrap gap-1">
+              {(
+                [
+                  ["drafts", "Drafts"],
+                  ["pending", "Pending VP"],
+                  ["approved", "Approved"],
+                ] as const
+              ).map(([tab, label]) => (
+                <Button
+                  key={tab}
+                  type="button"
+                  size="sm"
+                  variant={activeTab === tab ? "default" : "outline"}
+                  onClick={() => setTab(tab)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+            {canWrite && activeTab === "drafts" && (
               <div className="flex gap-2">
                 <select
                   className="flex h-9 flex-1 rounded-md border border-input bg-background px-2 text-sm"
@@ -234,15 +320,17 @@ export function ClassFeePlanEditor() {
             )}
             {isLoading ? (
               <p className="text-sm text-muted-foreground">Loading…</p>
+            ) : filteredPlans.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No plans in this tab.</p>
             ) : (
               <ul className="space-y-1">
-                {plans.map((p) => {
+                {filteredPlans.map((p) => {
                   const cls = p.classes as { name?: string } | null
                   return (
-                    <li key={p.id}>
+                    <li key={p.id} className="flex items-center gap-1">
                       <button
                         type="button"
-                        className={`w-full text-left rounded-md px-2 py-1.5 text-sm hover:bg-muted ${
+                        className={`flex-1 text-left rounded-md px-2 py-1.5 text-sm hover:bg-muted ${
                           selectedPlanId === p.id ? "bg-muted font-medium" : ""
                         }`}
                         onClick={() => setSelectedPlanId(p.id)}
@@ -252,6 +340,21 @@ export function ClassFeePlanEditor() {
                           {p.status}
                         </Badge>
                       </button>
+                      {canWrite && (p.status === "draft" || p.status === "rejected") && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive shrink-0"
+                          onClick={() => {
+                            if (window.confirm("Delete this draft fee plan?")) {
+                              deletePlanMut.mutate(p.id)
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                     </li>
                   )
                 })}
@@ -300,7 +403,7 @@ export function ClassFeePlanEditor() {
                     <ul className="text-muted-foreground">
                       {term.items.map((item, ii) => (
                         <li key={ii}>
-                          {item.name}: ₹{Number(item.amount).toLocaleString()}
+                          {feeItemDisplayName(item)}: ₹{Number(item.amount).toLocaleString()}
                         </li>
                       ))}
                     </ul>
@@ -361,29 +464,76 @@ export function ClassFeePlanEditor() {
                       )}
                     </div>
                     {term.items.map((item, ii) => (
-                      <div key={ii} className="grid grid-cols-2 gap-2">
-                        <Input
-                          placeholder="Fee component"
-                          value={item.name}
-                          onChange={(e) => {
+                      <div key={ii} className="grid grid-cols-[1fr_1fr_auto_auto] gap-2 items-end">
+                        <div>
+                          <Label className="text-xs">Category</Label>
+                          <select
+                            className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                            value={item.fee_category}
+                            onChange={(e) => {
+                              const next = [...terms]
+                              next[ti].items[ii] = {
+                                ...next[ti].items[ii],
+                                fee_category: e.target.value as FeeCategory,
+                              }
+                              setTerms(next)
+                            }}
+                          >
+                            {FEE_CATEGORIES.map((c) => (
+                              <option key={c.value} value={c.value}>
+                                {c.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        {item.fee_category === "other" ? (
+                          <div>
+                            <Label className="text-xs">Label</Label>
+                            <Input
+                              placeholder="Describe fee"
+                              value={item.custom_label}
+                              onChange={(e) => {
+                                const next = [...terms]
+                                next[ti].items[ii] = { ...next[ti].items[ii], custom_label: e.target.value }
+                                setTerms(next)
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div className="text-sm text-muted-foreground pb-2">
+                            {feeCategoryLabel(item.fee_category)}
+                          </div>
+                        )}
+                        <div>
+                          <Label className="text-xs">Amount</Label>
+                          <Input
+                            type="number"
+                            placeholder="Amount"
+                            value={item.amount || ""}
+                            onChange={(e) => {
+                              const next = [...terms]
+                              next[ti].items[ii] = {
+                                ...next[ti].items[ii],
+                                amount: Number(e.target.value) || 0,
+                              }
+                              setTerms(next)
+                            }}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 text-destructive"
+                          disabled={term.items.length <= 1}
+                          onClick={() => {
                             const next = [...terms]
-                            next[ti].items[ii] = { ...next[ti].items[ii], name: e.target.value }
+                            next[ti].items = next[ti].items.filter((_, i) => i !== ii)
                             setTerms(next)
                           }}
-                        />
-                        <Input
-                          type="number"
-                          placeholder="Amount"
-                          value={item.amount || ""}
-                          onChange={(e) => {
-                            const next = [...terms]
-                            next[ti].items[ii] = {
-                              ...next[ti].items[ii],
-                              amount: Number(e.target.value) || 0,
-                            }
-                            setTerms(next)
-                          }}
-                        />
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     ))}
                     <Button
@@ -392,7 +542,7 @@ export function ClassFeePlanEditor() {
                       size="sm"
                       onClick={() => {
                         const next = [...terms]
-                        next[ti].items.push({ name: "", amount: 0 })
+                        next[ti].items.push({ fee_category: "tuition", custom_label: "", amount: 0 })
                         setTerms(next)
                       }}
                     >
@@ -411,7 +561,7 @@ export function ClassFeePlanEditor() {
                         term_order: terms.length + 1,
                         term_label: `Term ${terms.length + 1}`,
                         due_date: "",
-                        items: [{ name: "Tuition", amount: 0 }],
+                        items: [{ fee_category: "tuition", custom_label: "", amount: 0 }],
                       },
                     ])
                   }

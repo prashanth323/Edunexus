@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
     if (notificationId) {
       const { data: row, error } = await admin
         .from("school_notifications")
-        .select("id, parent_email, title, body, email_sent_at")
+        .select("id, parent_email, title, body, email_sent_at, metadata")
         .eq("id", notificationId)
         .maybeSingle()
       if (error || !row) {
@@ -65,7 +65,24 @@ Deno.serve(async (req) => {
       }
       toEmail = row.parent_email ?? toEmail
       title = row.title
-      emailBody = row.body
+      const meta = (row.metadata ?? {}) as Record<string, unknown>
+      const feeLines = Array.isArray(meta.fee_lines) ? meta.fee_lines : null
+      if (feeLines?.length) {
+        const breakdown = feeLines
+          .map((line: Record<string, unknown>) => {
+            const name = String(line.name ?? "Fee")
+            const amount = line.amount != null ? `₹${Number(line.amount).toLocaleString()}` : ""
+            const due = line.due_date ? ` (due ${String(line.due_date)})` : ""
+            return `  • ${name}: ${amount}${due}`
+          })
+          .join("\n")
+        const lastPay = meta.last_date_to_pay
+          ? `\n\nLast date to pay: ${String(meta.last_date_to_pay)}`
+          : ""
+        emailBody = `${row.body}\n\nFee breakdown:\n${breakdown}${lastPay}`
+      } else {
+        emailBody = row.body
+      }
     }
 
     if (!toEmail || !title || !emailBody) {

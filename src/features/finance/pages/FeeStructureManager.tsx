@@ -19,6 +19,7 @@ import {
   groupFeeStructuresByClassAndTerm,
   type FeeStructureInput,
 } from "../api/feeManagement.api"
+import { feeCategoryLabel } from "../lib/feeCategories"
 import { getSectionsForSchool } from "@/features/exams/api/exams.api"
 
 const FREQUENCIES = [
@@ -29,7 +30,11 @@ const FREQUENCIES = [
   { value: "one_time", label: "One-time" },
 ]
 
-export function FeeStructureManager() {
+type FeeStructureManagerProps = {
+  embedded?: boolean
+}
+
+export function FeeStructureManager({ embedded = false }: FeeStructureManagerProps) {
   const activeSchoolId = useAuth((s) => s.activeSchoolId)
   const activeRole = useAuth((s) => s.activeRole)
   const qc = useQueryClient()
@@ -130,7 +135,7 @@ export function FeeStructureManager() {
   if (isLoading) {
     return (
       <div className="flex flex-col gap-6 animate-in fade-in duration-500">
-        <div><h1 className="text-3xl font-bold tracking-tight">Fee Structures</h1></div>
+        {!embedded && <div><h1 className="text-3xl font-bold tracking-tight">Fee Structures</h1></div>}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-48 rounded-xl" />)}
         </div>
@@ -140,25 +145,27 @@ export function FeeStructureManager() {
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Fee Structures</h1>
-          <p className="text-muted-foreground mt-1">
-            {isHeadAccountant
-              ? "Fee structures are created automatically when the VP approves your class fee plan."
-              : isAccountant
-                ? "Generate student invoices from VP-approved fee structures."
-                : "View VP-approved fee structures used for invoice generation."}
-          </p>
+      {!embedded && (
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Fee Structures</h1>
+            <p className="text-muted-foreground mt-1">
+              {isHeadAccountant
+                ? "VP-approved fee structures created from your class fee plans (read-only)."
+                : isAccountant
+                  ? "VP-approved fee structures — assign to sections to generate student invoices."
+                  : "View VP-approved fee structures used for invoice generation."}
+            </p>
+          </div>
+          {canCreate && (
+            <Button className="gap-2" onClick={() => setCreating(!creating)}>
+              <Plus className="h-4 w-4" /> New Fee Structure
+            </Button>
+          )}
         </div>
-        {canCreate && (
-          <Button className="gap-2" onClick={() => setCreating(!creating)}>
-            <Plus className="h-4 w-4" /> New Fee Structure
-          </Button>
-        )}
-      </div>
+      )}
 
-      {isHeadAccountant && (
+      {!embedded && isHeadAccountant && (
         <Card className="border-primary/20 bg-primary/5">
           <CardContent className="py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex gap-2 text-sm">
@@ -174,7 +181,7 @@ export function FeeStructureManager() {
         </Card>
       )}
 
-      {isAccountant && (
+      {!embedded && isAccountant && (
         <Card className="border-muted">
           <CardContent className="py-3 text-sm text-muted-foreground">
             Select a fee structure below and assign it to a section to generate invoices.
@@ -343,9 +350,16 @@ export function FeeStructureManager() {
                         <CardHeader className="pb-3">
                           <div className="flex justify-between items-start gap-2">
                             <CardTitle className="text-lg">{fs.name}</CardTitle>
-                            <Badge variant="outline" className="capitalize text-[10px] shrink-0">
-                              {fs.frequency.replace(/_/g, " ")}
-                            </Badge>
+                            <div className="flex flex-col items-end gap-1">
+                              {fs.fee_category && (
+                                <Badge variant="secondary" className="text-[10px] capitalize">
+                                  {feeCategoryLabel(fs.fee_category, fs.custom_label)}
+                                </Badge>
+                              )}
+                              <Badge variant="outline" className="capitalize text-[10px] shrink-0">
+                                {fs.frequency.replace(/_/g, " ")}
+                              </Badge>
+                            </div>
                           </div>
                           {fs.description && (
                             <CardDescription className="mt-1">{fs.description}</CardDescription>

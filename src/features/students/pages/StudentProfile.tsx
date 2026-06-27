@@ -56,6 +56,7 @@ import { buildStudentIdCardData } from "../lib/studentIdCardData"
 import { ClassTeacherCard } from "@/components/school/ClassTeacherCard"
 import { StudentHostelStatusPanel } from "@/features/hostel/components/StudentHostelStatusPanel"
 import { StudentPortalCredentialsPanel } from "@/features/students/components/StudentPortalCredentialsPanel"
+import { StudentFeePaymentStatus } from "@/features/finance/components/StudentFeePaymentStatus"
 import { canViewPortalCredentials } from "@/features/students/api/portalCredentials.api"
 import {
   getStudentClassTeacher,
@@ -749,55 +750,7 @@ export function StudentProfile({ portalMode = false, studentIdOverride }: Studen
 
         {/* Fees Tab */}
         <TabsContent value="fees">
-          <Card>
-            <CardHeader>
-              <CardTitle>Fee & Invoice History</CardTitle>
-              <CardDescription>All invoices and payment status for this student.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {student.invoices.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-lg text-muted-foreground">
-                  <CreditCard className="h-10 w-10 opacity-40 mb-3" />
-                  <p className="font-medium text-foreground">No invoices yet</p>
-                  <p className="text-sm mt-1">Create a fee structure and assign it to generate invoices.</p>
-                </div>
-              ) : (
-                <div className="border rounded-md overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-muted/40 text-left">
-                        <th className="p-3 font-medium">Invoice</th>
-                        <th className="p-3 font-medium">Due Date</th>
-                        <th className="p-3 font-medium text-right">Amount</th>
-                        <th className="p-3 font-medium text-right">Paid</th>
-                        <th className="p-3 font-medium text-right">Due</th>
-                        <th className="p-3 font-medium">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {student.invoices.map((inv) => (
-                        <tr key={inv.id} className="border-b last:border-0">
-                          <td className="p-3 font-mono text-xs">{inv.invoice_no}</td>
-                          <td className="p-3 whitespace-nowrap">{new Date(inv.due_date).toLocaleDateString()}</td>
-                          <td className="p-3 text-right">${Number(inv.amount).toLocaleString()}</td>
-                          <td className="p-3 text-right text-green-600">${Number(inv.paid_amount).toLocaleString()}</td>
-                          <td className="p-3 text-right font-semibold text-destructive">${Number(inv.due_amount).toLocaleString()}</td>
-                          <td className="p-3">
-                            <Badge
-                              variant={inv.status === "paid" ? "default" : inv.status === "overdue" ? "destructive" : "secondary"}
-                              className="capitalize text-[10px]"
-                            >
-                              {inv.status}
-                            </Badge>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <StudentFeePaymentStatus studentId={student.id} showStudentHeader={false} />
         </TabsContent>
 
         {/* ID Card Tab */}

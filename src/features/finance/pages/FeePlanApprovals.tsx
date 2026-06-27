@@ -22,6 +22,7 @@ import {
   reviewClassFeePlan,
   type ClassFeePlan,
 } from "../api/feePlans.api"
+import { feeCategoryLabel, feeItemDisplayName } from "../lib/feeCategories"
 
 function FeePlanReviewCard({
   plan,
@@ -76,6 +77,7 @@ function FeePlanReviewCard({
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead>Category</TableHead>
                         <TableHead>Fee component</TableHead>
                         <TableHead className="text-right">Amount</TableHead>
                       </TableRow>
@@ -83,7 +85,10 @@ function FeePlanReviewCard({
                     <TableBody>
                       {(term.items ?? []).map((item) => (
                         <TableRow key={item.id}>
-                          <TableCell>{item.name}</TableCell>
+                          <TableCell className="capitalize text-muted-foreground">
+                            {feeCategoryLabel(item.fee_category, item.custom_label)}
+                          </TableCell>
+                          <TableCell>{feeItemDisplayName(item)}</TableCell>
                           <TableCell className="text-right tabular-nums">
                             ₹{Number(item.amount).toLocaleString()}
                           </TableCell>
@@ -119,7 +124,11 @@ function FeePlanReviewCard({
   )
 }
 
-export function FeePlanApprovals() {
+type FeePlanApprovalsProps = {
+  embedded?: boolean
+}
+
+export function FeePlanApprovals({ embedded = false }: FeePlanApprovalsProps) {
   const activeSchoolId = useAuth((s) => s.activeSchoolId)
   const qc = useQueryClient()
   const [notes, setNotes] = useState<Record<string, string>>({})
@@ -139,17 +148,24 @@ export function FeePlanApprovals() {
       qc.invalidateQueries({ queryKey: ["class-fee-plans", activeSchoolId] })
       qc.invalidateQueries({ queryKey: ["fee-structures", activeSchoolId] })
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      const msg = e.message.includes("idx_class_fee_plans_one_approved")
+        ? "This class already has an approved fee plan for this year. Apply the latest database migration, or ask an admin to retire the old approved plan first."
+        : e.message
+      toast.error(msg)
+    },
   })
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Fee plan approvals</h1>
-        <p className="text-muted-foreground mt-1">
-          Review term-wise class fee plans submitted by the head accountant. Approved plans create fee structures automatically.
-        </p>
-      </div>
+    <div className={embedded ? "flex flex-col gap-4" : "flex flex-col gap-6"}>
+      {!embedded && (
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Fee plan approvals</h1>
+          <p className="text-muted-foreground mt-1">
+            Review term-wise class fee plans submitted by the head accountant. Approved plans create fee structures automatically.
+          </p>
+        </div>
+      )}
 
       {isLoading ? (
         <p className="text-muted-foreground">Loading…</p>

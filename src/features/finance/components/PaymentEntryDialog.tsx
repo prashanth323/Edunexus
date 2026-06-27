@@ -13,7 +13,11 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/features/auth/hooks/useAuth"
-import { recordPayment } from "../api/feeManagement.api"
+import {
+  FEE_STATUS_QUERY_KEYS,
+  getStudentFeePaymentStatus,
+  recordPayment,
+} from "../api/feeManagement.api"
 import { supabase } from "@/lib/supabase"
 
 type Props = {
@@ -36,9 +40,9 @@ export function PaymentEntryDialog({ open, onOpenChange }: Props) {
     queryFn: async () => {
       const { data: students } = await supabase
         .from("students")
-        .select("id, admission_no, profiles:profile_id ( full_name )")
+        .select("id, admission_no, first_name, last_name")
         .eq("school_id", activeSchoolId!)
-        .or(`admission_no.ilike.%${studentQuery}%`)
+        .or(`admission_no.ilike.%${studentQuery}%,first_name.ilike.%${studentQuery}%,last_name.ilike.%${studentQuery}%`)
         .limit(5)
       if (!students?.length) return []
       const ids = students.map((s) => s.id)
@@ -55,6 +59,12 @@ export function PaymentEntryDialog({ open, onOpenChange }: Props) {
     enabled: open && !!activeSchoolId && studentQuery.length >= 2,
   })
 
+  const { data: studentStatus } = useQuery({
+    queryKey: ["student-fee-status", selectedStudentId],
+    queryFn: () => getStudentFeePaymentStatus(selectedStudentId),
+    enabled: open && !!selectedStudentId,
+  })
+
   const mutation = useMutation({
     mutationFn: () =>
       recordPayment(activeSchoolId!, {
@@ -67,7 +77,9 @@ export function PaymentEntryDialog({ open, onOpenChange }: Props) {
       }),
     onSuccess: () => {
       toast.success("Payment recorded")
-      qc.invalidateQueries({ queryKey: ["finance"] })
+      for (const key of FEE_STATUS_QUERY_KEYS) {
+        qc.invalidateQueries({ queryKey: [key] })
+      }
       onOpenChange(false)
     },
     onError: (e: Error) => toast.error(e.message),
@@ -81,9 +93,23 @@ export function PaymentEntryDialog({ open, onOpenChange }: Props) {
         </DialogHeader>
         <div className="grid gap-3">
           <div className="grid gap-1.5">
-            <Label>Search student (admission no.)</Label>
+            <Label>Search student (admission no. or name)</Label>
             <Input value={studentQuery} onChange={(e) => setStudentQuery(e.target.value)} />
           </div>
+
+          {studentStatus && (
+            <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1">
+              <p className="font-medium">{studentStatus.full_name}</p>
+              <p className="text-muted-foreground">Adm. {studentStatus.admission_no}</p>
+              <p className="text-muted-foreground">
+                {studentStatus.class_name} – {studentStatus.section_name}
+              </p>
+              {studentStatus.parent_email && (
+                <p className="text-muted-foreground">Parent: {studentStatus.parent_email}</p>
+              )}
+            </div>
+          )}
+
           <div className="grid gap-1.5">
             <Label>Invoice</Label>
             <select
@@ -101,7 +127,7 @@ export function PaymentEntryDialog({ open, onOpenChange }: Props) {
               <option value="">Select invoice</option>
               {invoices.map((i) => (
                 <option key={i.id} value={i.id}>
-                  {i.invoice_no} — due {i.due_amount}
+                  {i.student?.admission_no} — {i.invoice_no} — due ₹{i.due_amount}
                 </option>
               ))}
             </select>
@@ -113,10 +139,14 @@ export function PaymentEntryDialog({ open, onOpenChange }: Props) {
             </div>
             <div className="grid gap-1.5">
               <Label>Method</Label>
-              <select className="flex h-10 rounded-md border px-3 text-sm" value={method} onChange={(e) => setMethod(e.target.value)}>
+              <select
+                className="flex h-10 rounded-md border px-3 text-sm"
+                value={method}
+                onChange={(e) => setMethod(e.target.value)}
+              >
                 <option value="cash">Cash</option>
                 <option value="upi">UPI</option>
-                <option value="bank">Bank transfer</option>
+                <option value="bank_transfer">Bank transfer</option>
                 <option value="cheque">Cheque</option>
               </select>
             </div>

@@ -17,6 +17,8 @@ import { PendingDuesReport } from "@/features/finance/pages/PendingDuesReport"
 import { ClassFeePlanEditor } from "@/features/finance/pages/ClassFeePlanEditor"
 import { FeePlanApprovals } from "@/features/finance/pages/FeePlanApprovals"
 import { FeeDuesWorkspace } from "@/features/finance/pages/FeeDuesWorkspace"
+import { FeeOverdueDues } from "@/features/finance/pages/FeeOverdueDues"
+import { VpFeeStatus } from "@/features/finance/pages/VpFeeStatus"
 import { AttendanceMarking } from "@/features/attendance/pages/AttendanceMarking"
 import { FinanceRouter } from "@/features/finance/pages/FinanceRouter"
 import { CrmPipeline } from "@/features/crm/pages/CrmPipeline"
@@ -184,6 +186,22 @@ export const router = createBrowserRouter([
             element: (
               <RequireRole>
                 <FeeDuesWorkspace />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "finance/overdue-dues",
+            element: (
+              <RequireRole>
+                <FeeOverdueDues readOnly />
+              </RequireRole>
+            ),
+          },
+          {
+            path: "finance/vp-fee-status",
+            element: (
+              <RequireRole>
+                <VpFeeStatus />
               </RequireRole>
             ),
           },

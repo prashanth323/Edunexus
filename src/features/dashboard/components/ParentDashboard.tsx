@@ -45,6 +45,7 @@ import { fetchDailyAttendanceForStudent } from "@/features/attendance/lib/dailyA
 import { AttendanceTodayBanner } from "@/features/attendance/components/AttendanceTodayBanner"
 import { getMyWardHostelStatus } from "@/features/hostel/api/hostelStatus.api"
 import { HOSTEL_LEAVE_STATUSES } from "@/features/hostel/lib/hostelStatusLabels"
+import { StudentFeePaymentStatus } from "@/features/finance/components/StudentFeePaymentStatus"
 import { format } from "date-fns"
 
 type ParentChildRow = {
@@ -618,6 +619,15 @@ export function ParentDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {studentIds.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold tracking-tight">Fee payment status</h2>
+          {rows.map((child) => (
+            <StudentFeePaymentStatus key={child.student_id} studentId={child.student_id} />
+          ))}
+        </div>
+      )}
 
       {/* Academic Performance + Communication Hub */}
       <div className="grid gap-6 md:grid-cols-3">

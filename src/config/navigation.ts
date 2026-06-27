@@ -171,22 +171,34 @@ export const SIDEBAR_LINKS: NavLink[] = [
     roles: ["head_accountant", ...PRINCIPAL_LIKE, "school_admin"],
   },
   {
+    title: "Fee status",
+    href: "/finance/vp-fee-status",
+    icon: CreditCard,
+    roles: ["vice_principal", "principal"],
+  },
+  {
     title: "Fee approvals",
     href: "/finance/fee-approvals",
     icon: ClipboardCheck,
-    roles: ["vice_principal", "principal", "school_admin"],
+    roles: ["school_admin"],
   },
   {
     title: "Fee structures",
     href: "/finance/fee-structures",
     icon: CreditCard,
-    roles: ["accountant", "head_accountant", ...PRINCIPAL_LIKE, "school_admin"],
+    roles: ["accountant", "head_accountant", "operations_admin", "school_admin"],
   },
   {
     title: "Fee dues & notify",
     href: "/finance/dues",
     icon: CreditCard,
-    roles: ["accountant", ...PRINCIPAL_LIKE, "school_admin"],
+    roles: ["accountant", "operations_admin", "school_admin"],
+  },
+  {
+    title: "Overdue fee dues",
+    href: "/finance/overdue-dues",
+    icon: CreditCard,
+    roles: ["school_admin"],
   },
   {
     title: "LMS",
@@ -336,12 +348,20 @@ export function getRolesAllowedForPath(pathname: string): readonly string[] | nu
     }
   }
 
+  if (normalized === "/finance/vp-fee-status" || normalized.startsWith("/finance/vp-fee-status/")) {
+    return ["principal", "vice_principal"]
+  }
+
   if (normalized === "/finance/fee-approvals" || normalized.startsWith("/finance/fee-approvals/")) {
-    return ["principal", "vice_principal", "school_admin"]
+    return ["school_admin"]
+  }
+
+  if (normalized === "/finance/overdue-dues" || normalized.startsWith("/finance/overdue-dues/")) {
+    return ["school_admin"]
   }
 
   if (normalized === "/finance/fee-structures" || normalized.startsWith("/finance/fee-structures/")) {
-    return ["principal", "vice_principal", "operations_admin", "school_admin", "head_accountant", "accountant"]
+    return ["operations_admin", "school_admin", "head_accountant", "accountant"]
   }
 
   if (normalized === "/finance/pending-dues" || normalized.startsWith("/finance/pending-dues/")) {

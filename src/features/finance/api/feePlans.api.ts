@@ -1,6 +1,13 @@
 import { supabase } from "@/lib/supabase"
+import { feeItemDisplayName, type FeeCategory } from "../lib/feeCategories"
 
-export type FeePlanStatus = "draft" | "pending_vp" | "approved" | "rejected"
+export type FeePlanStatus = "draft" | "pending_vp" | "approved" | "rejected" | "superseded"
+
+export type FeePlanItemInput = {
+  fee_category: FeeCategory
+  custom_label?: string | null
+  amount: number
+}
 
 export type ClassFeePlan = {
   id: string
@@ -27,6 +34,8 @@ export type FeePlanItem = {
   term_id: string
   name: string
   amount: number
+  fee_category: FeeCategory
+  custom_label: string | null
 }
 
 export type FeeCatalogRow = {
@@ -90,7 +99,7 @@ export async function getFeePlanWithTerms(planId: string): Promise<{ plan: Class
   if (termIds.length) {
     const { data: itemRows, error: iErr } = await supabase
       .from("class_fee_plan_items")
-      .select("id, term_id, name, amount")
+      .select("id, term_id, name, amount, fee_category, custom_label")
       .in("term_id", termIds)
     if (iErr) throw iErr
     items = (itemRows ?? []) as FeePlanItem[]
@@ -126,7 +135,7 @@ export async function createClassFeePlan(
 export async function upsertFeePlanTerm(
   planId: string,
   term: { id?: string; term_order: number; term_label: string; due_date: string | null },
-  items: { id?: string; name: string; amount: number }[],
+  items: FeePlanItemInput[],
 ): Promise<void> {
   let termId = term.id
   if (termId) {
@@ -155,16 +164,24 @@ export async function upsertFeePlanTerm(
     termId = data.id
   }
 
-  if (items.length) {
+  const validItems = items.filter((i) => i.amount >= 0)
+  if (validItems.length) {
     const { error } = await supabase.from("class_fee_plan_items").insert(
-      items.map((i) => ({
+      validItems.map((i) => ({
         term_id: termId!,
-        name: i.name,
+        name: feeItemDisplayName(i),
         amount: i.amount,
+        fee_category: i.fee_category,
+        custom_label: i.fee_category === "other" ? i.custom_label?.trim() || null : null,
       })),
     )
     if (error) throw error
   }
+}
+
+export async function deleteClassFeePlan(planId: string): Promise<void> {
+  const { error } = await supabase.rpc("delete_class_fee_plan", { p_plan_id: planId })
+  if (error) throw error
 }
 
 export async function deleteFeePlanTerm(termId: string): Promise<void> {
@@ -177,12 +194,14 @@ export async function notifyStudentFeeDue(params: {
   title: string
   body: string
   amount?: number
+  metadata?: Record<string, unknown>
 }): Promise<{ notification_id: string; parent_email: string | null }> {
   const { data, error } = await supabase.rpc("notify_student_fee_due", {
     p_student_id: params.studentId,
     p_title: params.title,
     p_body: params.body,
     p_amount: params.amount ?? null,
+    p_metadata: params.metadata ?? {},
   })
   if (error) throw error
   const row = data as { notification_id: string; parent_email: string | null }
