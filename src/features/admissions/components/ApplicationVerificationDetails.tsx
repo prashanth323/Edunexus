@@ -6,10 +6,19 @@ type Props = {
   feeTotal?: number
 }
 
+function previousSchoolFields(fd: Record<string, unknown>) {
+  const name = String(fd.previous_school_name ?? fd.previous_school ?? "").trim()
+  const board = String(fd.previous_school_board ?? "").trim()
+  const classYear = String(fd.previous_class_or_year ?? "").trim()
+  const city = String(fd.previous_school_city ?? "").trim()
+  return { name, board, classYear, city, hasAny: Boolean(name || board || classYear || city) }
+}
+
 export function ApplicationVerificationDetails({ app, feeTotal }: Props) {
   const fd = app.form_data
   const studentEmail = String(fd.student_email ?? fd.email ?? app.leads?.parent_email ?? "—")
   const docs = app.documents ?? []
+  const prev = previousSchoolFields(fd)
 
   return (
     <div className="grid gap-2 text-sm sm:grid-cols-2">
@@ -45,24 +54,47 @@ export function ApplicationVerificationDetails({ app, feeTotal }: Props) {
           {app.identity_number}
         </p>
       )}
-      {(Boolean(fd.date_of_birth) || Boolean(fd.gender) || Boolean(fd.address)) && (
+      {Boolean(fd.date_of_birth) && (
+        <p>
+          <span className="text-muted-foreground">DOB:</span>{" "}
+          {String(fd.date_of_birth ?? "—")}
+        </p>
+      )}
+      {Boolean(fd.gender) && (
+        <p>
+          <span className="text-muted-foreground">Gender:</span>{" "}
+          {String(fd.gender ?? "—")}
+        </p>
+      )}
+      {Boolean(fd.address) && (
+        <p className="sm:col-span-2">
+          <span className="text-muted-foreground">Address:</span>{" "}
+          {String(fd.address ?? "—")}
+        </p>
+      )}
+      {prev.hasAny && (
         <>
-          <p>
-            <span className="text-muted-foreground">DOB:</span>{" "}
-            {String(fd.date_of_birth ?? "—")}
-          </p>
-          <p>
-            <span className="text-muted-foreground">Gender:</span>{" "}
-            {String(fd.gender ?? "—")}
-          </p>
-          <p className="sm:col-span-2">
-            <span className="text-muted-foreground">Address:</span>{" "}
-            {String(fd.address ?? "—")}
-          </p>
-          <p className="sm:col-span-2">
-            <span className="text-muted-foreground">Previous school:</span>{" "}
-            {String(fd.previous_school ?? "—")}
-          </p>
+          <p className="sm:col-span-2 font-medium text-muted-foreground pt-1">Previous school</p>
+          {prev.name && (
+            <p>
+              <span className="text-muted-foreground">School:</span> {prev.name}
+            </p>
+          )}
+          {prev.board && (
+            <p>
+              <span className="text-muted-foreground">Board:</span> {prev.board}
+            </p>
+          )}
+          {prev.classYear && (
+            <p>
+              <span className="text-muted-foreground">Last class / year:</span> {prev.classYear}
+            </p>
+          )}
+          {prev.city && (
+            <p>
+              <span className="text-muted-foreground">City:</span> {prev.city}
+            </p>
+          )}
         </>
       )}
       <div className="sm:col-span-2 flex flex-wrap gap-2">

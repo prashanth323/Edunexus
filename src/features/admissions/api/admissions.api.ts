@@ -516,6 +516,14 @@ export async function approveAdmissionApplication(
   if (error) throw error
   if (!studentId) throw new Error("Approval did not return a student id")
 
+  const { error: prevSchoolErr } = await supabase.rpc("copy_application_previous_school_to_student", {
+    p_application_id: applicationId,
+    p_student_id: studentId,
+  })
+  if (prevSchoolErr) {
+    console.warn("[admissions] copy previous school failed", prevSchoolErr.message)
+  }
+
   const serviceIntent: "self" | "school_bus" | "hostel" =
     transportMode !== "self"
       ? transportMode

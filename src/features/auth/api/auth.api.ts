@@ -27,13 +27,37 @@ export async function updateAccountPassword(newPassword: string): Promise<void> 
 }
 
 export async function loginWithEmail(credentials: LoginCredentials) {
+  const email = credentials.email.trim().toLowerCase()
   const { data, error } = await supabase.auth.signInWithPassword({
-    email: credentials.email,
+    email,
     password: credentials.password,
   })
 
-  if (error) throw error
+  if (error) throw new Error(mapLoginErrorMessage(error.message))
   return data
+}
+
+export function mapLoginErrorMessage(message: string): string {
+  const lower = message.toLowerCase()
+  if (lower.includes("invalid login credentials")) {
+    return (
+      "Email or password is incorrect. If you were invited by your school, open the invitation email " +
+      "and use the link to set your password first — you cannot sign in here until that is done. " +
+      "Use Forgot password below if you already set a password."
+    )
+  }
+  if (lower.includes("email not confirmed")) {
+    return "Please confirm your email using the link we sent before signing in."
+  }
+  return message
+}
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  const redirectTo = `${window.location.origin}/auth/set-password`
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+    redirectTo,
+  })
+  if (error) throw error
 }
 
 export async function signOut() {

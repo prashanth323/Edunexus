@@ -18,6 +18,8 @@ export type TimetableSlot = {
   start_time: string | null
   end_time: string | null
   room_no: string | null
+  batch_id?: string | null
+  batch_status?: string | null
 }
 
 export type SectionWithClassTeacher = {
@@ -40,6 +42,7 @@ export type UpsertSlotPayload = {
   id?: string
   school_id: string
   section_id: string
+  batch_id: string
   subject_id: string
   staff_id: string | null
   day_of_week: number
@@ -51,10 +54,23 @@ export type UpsertSlotPayload = {
 
 // ─── TIMETABLE QUERIES ────────────────────────────────────────
 
-/** Fetch all timetable slots for a section (principal editor) */
+/** Fetch all timetable slots for a section (principal / VP editor — includes drafts) */
 export async function getTimetableForSection(sectionId: string) {
   const { data, error } = await supabase
     .from("v_section_timetable")
+    .select("*")
+    .eq("section_id", sectionId)
+    .order("day_of_week")
+    .order("period_no")
+
+  if (error) throw error
+  return (data ?? []) as TimetableSlot[]
+}
+
+/** Fetch published timetable slots for a section (class teacher read-only) */
+export async function getPublishedTimetableForSection(sectionId: string) {
+  const { data, error } = await supabase
+    .from("v_section_timetable_published")
     .select("*")
     .eq("section_id", sectionId)
     .order("day_of_week")

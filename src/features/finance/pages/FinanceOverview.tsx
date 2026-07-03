@@ -368,6 +368,22 @@ export function FinanceOverview({ embedded = false }: FinanceOverviewProps) {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
+          {embedded && activeRole === "accountant" && (
+            <Card className="border-primary/20 bg-primary/5">
+              <CardContent className="py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Class yearly fee plans</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    View the full approved structure — all terms, lines, and due dates.
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" asChild>
+                  <Link to="/finance/fee-structures">Open fee structures</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
           <FinanceOverviewMetricsSection
             m={m ?? EMPTY_FINANCE_METRICS}
             transactionsLen={transactions.length}

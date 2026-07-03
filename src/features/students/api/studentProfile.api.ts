@@ -141,6 +141,10 @@ export type StudentFullProfile = {
   permanent_address: Record<string, string> | null
   emergency_contact: Record<string, string> | null
   medical_info: Record<string, string> | null
+  previous_school_name: string | null
+  previous_school_board: string | null
+  previous_class_or_year: string | null
+  previous_school_city: string | null
   documents: Array<{
     label: string
     filename: string

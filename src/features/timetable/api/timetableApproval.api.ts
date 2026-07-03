@@ -30,23 +30,23 @@ export async function getTimetableBatches(schoolId: string, status?: string) {
 }
 
 export async function submitTimetableForApproval(batchId: string) {
-  const { error } = await supabase
-    .from("timetable_batches")
-    .update({ status: "pending_approval" })
-    .eq("id", batchId)
+  const { error } = await supabase.rpc("submit_timetable_for_approval", {
+    p_batch_id: batchId,
+  })
   if (error) throw error
 }
 
 export async function approveTimetableBatch(batchId: string) {
-  const { data: user } = await supabase.auth.getUser()
-  const { error } = await supabase
-    .from("timetable_batches")
-    .update({
-      status: "published",
-      approved_by: user.user?.id,
-      approved_at: new Date().toISOString(),
-    })
-    .eq("id", batchId)
+  const { error } = await supabase.rpc("approve_timetable_batch", {
+    p_batch_id: batchId,
+  })
+  if (error) throw error
+}
+
+export async function revertTimetableBatchToDraft(batchId: string) {
+  const { error } = await supabase.rpc("revert_timetable_batch_to_draft", {
+    p_batch_id: batchId,
+  })
   if (error) throw error
 }
 
@@ -54,8 +54,24 @@ export async function getOrCreateTimetableBatch(params: {
   schoolId: string
   sectionId: string
   academicYearId: string
-}) {
-  const { data: existing } = await supabase
+}): Promise<TimetableBatch> {
+  const { data, error } = await supabase.rpc("get_or_create_timetable_batch", {
+    p_school_id: params.schoolId,
+    p_section_id: params.sectionId,
+    p_academic_year_id: params.academicYearId,
+  })
+
+  if (error) throw error
+  return data as TimetableBatch
+}
+
+/** Read batch for a section without creating a new draft row. */
+export async function getTimetableBatchForSection(params: {
+  schoolId: string
+  sectionId: string
+  academicYearId: string
+}): Promise<TimetableBatch | null> {
+  const { data, error } = await supabase
     .from("timetable_batches")
     .select("*")
     .eq("school_id", params.schoolId)
@@ -63,21 +79,6 @@ export async function getOrCreateTimetableBatch(params: {
     .eq("academic_year_id", params.academicYearId)
     .maybeSingle()
 
-  if (existing) return existing as TimetableBatch
-
-  const { data: user } = await supabase.auth.getUser()
-  const { data, error } = await supabase
-    .from("timetable_batches")
-    .insert({
-      school_id: params.schoolId,
-      section_id: params.sectionId,
-      academic_year_id: params.academicYearId,
-      status: "draft",
-      created_by: user.user?.id,
-    })
-    .select()
-    .single()
-
   if (error) throw error
-  return data as TimetableBatch
+  return data as TimetableBatch | null
 }

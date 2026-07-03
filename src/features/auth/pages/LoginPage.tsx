@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -19,13 +19,56 @@ import {
 import { Input } from "@/components/ui/input"
 import { PasswordInput } from "@/components/ui/password-input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { loginSchema, type LoginCredentials, loginWithEmail } from "../api/auth.api"
+import { loginSchema, type LoginCredentials, loginWithEmail, requestPasswordReset } from "../api/auth.api"
 import { useAuth } from "../hooks/useAuth"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 
 export function LoginPage() {
   const navigate = useNavigate()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [forgotOpen, setForgotOpen] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState("")
+  const [forgotSubmitting, setForgotSubmitting] = useState(false)
   const initialize = useAuth(state => state.initialize)
+
+  useEffect(() => {
+    const hash = window.location.hash
+    if (
+      hash.includes("access_token") ||
+      hash.includes("type=invite") ||
+      hash.includes("type=recovery")
+    ) {
+      navigate(`/auth/set-password${hash}`, { replace: true })
+    }
+  }, [navigate])
+
+  async function handleForgotPassword(e: React.FormEvent) {
+    e.preventDefault()
+    const email = forgotEmail.trim()
+    if (!email) {
+      toast.error("Enter your email address")
+      return
+    }
+    try {
+      setForgotSubmitting(true)
+      await requestPasswordReset(email)
+      toast.success("Password reset email sent — check your inbox")
+      setForgotOpen(false)
+      setForgotEmail("")
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Could not send reset email")
+    } finally {
+      setForgotSubmitting(false)
+    }
+  }
 
   const form = useForm<LoginCredentials>({
     resolver: zodResolver(loginSchema),
@@ -126,9 +169,16 @@ export function LoginPage() {
                       <FormItem>
                         <div className="flex items-center justify-between">
                           <FormLabel>Password</FormLabel>
-                          <a href="#" className="text-sm font-medium text-primary hover:underline">
+                          <button
+                            type="button"
+                            className="text-sm font-medium text-primary hover:underline"
+                            onClick={() => {
+                              setForgotEmail(form.getValues("email"))
+                              setForgotOpen(true)
+                            }}
+                          >
                             Forgot password?
-                          </a>
+                          </button>
                         </div>
                         <FormControl>
                           <PasswordInput autoComplete="current-password" {...field} />
@@ -151,8 +201,44 @@ export function LoginPage() {
               </Form>
             </CardContent>
           </Card>
+
+          <p className="text-center text-xs text-muted-foreground px-4">
+            First time here? Use the invitation email from your school to set your password before signing in.
+          </p>
         </div>
       </div>
+
+      <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset password</DialogTitle>
+            <DialogDescription>
+              We will email a link to set a new password. Use the same email address you were invited with.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleForgotPassword} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="forgot-email">Email</Label>
+              <Input
+                id="forgot-email"
+                type="email"
+                autoComplete="username"
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                placeholder="name@school.edu"
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setForgotOpen(false)} disabled={forgotSubmitting}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={forgotSubmitting}>
+                {forgotSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send reset link"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -44,8 +44,10 @@ import { getNotices } from "@/features/notices/api/notices.api"
 import { fetchDailyAttendanceForStudent } from "@/features/attendance/lib/dailyAttendanceRead"
 import { AttendanceTodayBanner } from "@/features/attendance/components/AttendanceTodayBanner"
 import { getMyWardHostelStatus } from "@/features/hostel/api/hostelStatus.api"
+import { HostelStatusAlertsPanel } from "@/features/hostel/components/HostelStatusAlertsPanel"
 import { HOSTEL_LEAVE_STATUSES } from "@/features/hostel/lib/hostelStatusLabels"
 import { StudentFeePaymentStatus } from "@/features/finance/components/StudentFeePaymentStatus"
+import { ClassYearlyFeePlanSummary } from "@/features/finance/components/ClassYearlyFeePlanSummary"
 import { format } from "date-fns"
 
 type ParentChildRow = {
@@ -325,6 +327,13 @@ export function ParentDashboard() {
           </p>
         </div>
       ))}
+
+      <HostelStatusAlertsPanel
+        title="Hostel updates for your ward"
+        description="Notifications when hostel staff records your child's status."
+        limit={6}
+        audience="parent"
+      />
 
       {/* Visual Analytics Hub Cards */}
       <div className="grid gap-4 sm:grid-cols-3">
@@ -622,9 +631,20 @@ export function ParentDashboard() {
 
       {studentIds.length > 0 && (
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold tracking-tight">Fee payment status</h2>
+          <h2 className="text-lg font-semibold tracking-tight">Class yearly fees</h2>
           {rows.map((child) => (
-            <StudentFeePaymentStatus key={child.student_id} studentId={child.student_id} />
+            <ClassYearlyFeePlanSummary
+              key={`yearly-${child.student_id}`}
+              studentId={child.student_id}
+              showPaymentStatus
+              hideDescription
+              compact
+              title={`${child.student_name} — yearly fee plan`}
+            />
+          ))}
+          <h2 className="text-lg font-semibold tracking-tight pt-2">Fee payment status</h2>
+          {rows.map((child) => (
+            <StudentFeePaymentStatus key={child.student_id} studentId={child.student_id} parentView />
           ))}
         </div>
       )}

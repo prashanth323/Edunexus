@@ -6,9 +6,18 @@ import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/features/auth/hooks/useAuth"
 import { getClassesForSchool } from "@/features/admissions/api/admissions.api"
 import {
@@ -17,18 +26,20 @@ import {
   deleteFeePlanTerm,
   getClassFeePlans,
   getFeePlanWithTerms,
+  saveClassFeePlanTerms,
   submitClassFeePlan,
-  upsertFeePlanTerm,
   type FeePlanTerm,
   type FeePlanItemInput,
 } from "../api/feePlans.api"
-import { FEE_CATEGORIES, feeCategoryLabel, feeItemDisplayName, type FeeCategory } from "../lib/feeCategories"
+import { FEE_CATEGORIES, feeCategoryLabel, type FeeCategory } from "../lib/feeCategories"
+import { ClassYearlyFeePlanSummary, type DraftYearlyTerm } from "../components/ClassYearlyFeePlanSummary"
 import { supabase } from "@/lib/supabase"
 
 type TermItemDraft = {
   fee_category: FeeCategory
   custom_label: string
   amount: number
+  due_date: string
 }
 
 type TermDraft = {
@@ -44,7 +55,6 @@ type PlanTab = "drafts" | "pending" | "approved"
 function validateTermsForSubmit(terms: TermDraft[]): string | null {
   if (!terms.length) return "Add at least one term before submitting."
   for (const t of terms) {
-    if (!t.due_date.trim()) return `Set a due date for ${t.term_label || "each term"}.`
     const validItems = t.items.filter((i) => i.amount > 0)
     if (!validItems.length) {
       return `Add fee line items with amounts for ${t.term_label || "each term"}.`
@@ -53,26 +63,61 @@ function validateTermsForSubmit(terms: TermDraft[]): string | null {
       if (item.fee_category === "other" && !item.custom_label.trim()) {
         return `Enter a label for "Other" fee in ${t.term_label}.`
       }
+      const lineDue = item.due_date.trim() || t.due_date.trim()
+      if (!lineDue) {
+        return `Set a due date for each fee line in ${t.term_label || "each term"}.`
+      }
     }
   }
   return null
 }
 
-function itemsToInput(items: TermItemDraft[]): FeePlanItemInput[] {
+function itemsToInput(items: TermItemDraft[], termDueDate: string): FeePlanItemInput[] {
   return items.map((i) => ({
     fee_category: i.fee_category,
     custom_label: i.fee_category === "other" ? i.custom_label : null,
     amount: i.amount,
+    due_date: i.due_date.trim() || termDueDate || null,
   }))
 }
 
-function mapLoadedItem(item: { fee_category?: string; custom_label?: string | null; name?: string; amount: number }): TermItemDraft {
+function mapLoadedItem(item: {
+  fee_category?: string
+  custom_label?: string | null
+  name?: string
+  amount: number
+  due_date?: string | null
+}): TermItemDraft {
   const cat = (item.fee_category as FeeCategory) || "tuition"
   return {
     fee_category: cat,
     custom_label: item.custom_label ?? (cat === "other" ? item.name ?? "" : ""),
     amount: Number(item.amount),
+    due_date: item.due_date ?? "",
   }
+}
+
+function mapLoadedTermsToDraft(loaded: FeePlanTerm[]): TermDraft[] {
+  return loaded.map((t) => ({
+    id: t.id,
+    term_order: t.term_order,
+    term_label: t.term_label,
+    due_date: t.due_date ?? "",
+    items: (t.items ?? []).map(mapLoadedItem),
+  }))
+}
+
+function termsToSaveInput(terms: TermDraft[]): Parameters<typeof saveClassFeePlanTerms>[1] {
+  return terms.map((t, index) => ({
+    id: t.id,
+    term_order: index + 1,
+    term_label: t.term_label,
+    due_date: t.due_date || null,
+    items: itemsToInput(
+      t.items.filter((i) => i.amount > 0 || i.fee_category),
+      t.due_date,
+    ),
+  }))
 }
 
 export function ClassFeePlanEditor() {
@@ -82,6 +127,8 @@ export function ClassFeePlanEditor() {
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null)
   const [terms, setTerms] = useState<TermDraft[]>([])
   const [newClassId, setNewClassId] = useState("")
+  const [deletePlanId, setDeletePlanId] = useState<string | null>(null)
+  const [showSupersededHistory, setShowSupersededHistory] = useState(false)
 
   const canWrite = activeRole === "head_accountant"
   const canSeeVpApprovals =
@@ -118,16 +165,31 @@ export function ClassFeePlanEditor() {
 
   const setTab = (tab: PlanTab) => setSearchParams({ tab })
 
+  const tabCounts = useMemo(
+    () => ({
+      drafts: plans.filter((p) => p.status === "draft" || p.status === "rejected").length,
+      pending: plans.filter((p) => p.status === "pending_vp").length,
+      approved: plans.filter((p) => p.status === "approved").length,
+      superseded: plans.filter((p) => p.status === "superseded").length,
+    }),
+    [plans],
+  )
+
   const filteredPlans = useMemo(() => {
     switch (activeTab) {
       case "pending":
         return plans.filter((p) => p.status === "pending_vp")
       case "approved":
-        return plans.filter((p) => p.status === "approved" || p.status === "superseded")
+        return plans.filter((p) => p.status === "approved")
       default:
         return plans.filter((p) => p.status === "draft" || p.status === "rejected")
     }
   }, [plans, activeTab])
+
+  const supersededPlans = useMemo(
+    () => plans.filter((p) => p.status === "superseded"),
+    [plans],
+  )
 
   const selectedPlan = useMemo(
     () => plans.find((p) => p.id === selectedPlanId) ?? null,
@@ -138,15 +200,7 @@ export function ClassFeePlanEditor() {
     queryKey: ["fee-plan-detail", selectedPlanId],
     queryFn: async () => {
       const { terms: loaded } = await getFeePlanWithTerms(selectedPlanId!)
-      setTerms(
-        loaded.map((t: FeePlanTerm) => ({
-          id: t.id,
-          term_order: t.term_order,
-          term_label: t.term_label,
-          due_date: t.due_date ?? "",
-          items: (t.items ?? []).map(mapLoadedItem),
-        })),
-      )
+      setTerms(mapLoadedTermsToDraft(loaded))
       return loaded
     },
     enabled: !!selectedPlanId,
@@ -172,7 +226,7 @@ export function ClassFeePlanEditor() {
           term_order: 1,
           term_label: "Term 1",
           due_date: "",
-          items: [{ fee_category: "tuition", custom_label: "", amount: 0 }],
+          items: [{ fee_category: "tuition", custom_label: "", amount: 0, due_date: "" }],
         },
       ])
       return id
@@ -186,25 +240,21 @@ export function ClassFeePlanEditor() {
     onError: (e: Error) => toast.error(e.message),
   })
 
+  const reloadTerms = async (planId: string) => {
+    const { terms: loaded } = await getFeePlanWithTerms(planId)
+    setTerms(mapLoadedTermsToDraft(loaded))
+  }
+
   const saveMut = useMutation({
     mutationFn: async () => {
       if (!selectedPlanId) return
-      for (const t of terms) {
-        await upsertFeePlanTerm(
-          selectedPlanId,
-          {
-            id: t.id,
-            term_order: t.term_order,
-            term_label: t.term_label,
-            due_date: t.due_date || null,
-          },
-          itemsToInput(t.items.filter((i) => i.amount > 0 || i.fee_category)),
-        )
-      }
+      await saveClassFeePlanTerms(selectedPlanId, termsToSaveInput(terms))
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Plan saved")
+      if (selectedPlanId) await reloadTerms(selectedPlanId)
       qc.invalidateQueries({ queryKey: ["class-fee-plans", activeSchoolId] })
+      qc.invalidateQueries({ queryKey: ["fee-plan-detail", selectedPlanId] })
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -214,23 +264,23 @@ export function ClassFeePlanEditor() {
       const err = validateTermsForSubmit(terms)
       if (err) throw new Error(err)
       if (!selectedPlanId) throw new Error("Select a plan")
-      for (const t of terms) {
-        await upsertFeePlanTerm(
-          selectedPlanId,
-          {
-            id: t.id,
-            term_order: t.term_order,
-            term_label: t.term_label,
-            due_date: t.due_date || null,
-          },
-          itemsToInput(t.items.filter((i) => i.amount > 0)),
-        )
-      }
+      await saveClassFeePlanTerms(
+        selectedPlanId,
+        terms.map((t, index) => ({
+          id: t.id,
+          term_order: index + 1,
+          term_label: t.term_label,
+          due_date: t.due_date || null,
+          items: itemsToInput(t.items.filter((i) => i.amount > 0), t.due_date),
+        })),
+      )
       await submitClassFeePlan(selectedPlanId)
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Submitted to VP for approval")
+      if (selectedPlanId) await reloadTerms(selectedPlanId)
       qc.invalidateQueries({ queryKey: ["class-fee-plans", activeSchoolId] })
+      qc.invalidateQueries({ queryKey: ["fee-plan-detail", selectedPlanId] })
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -238,6 +288,21 @@ export function ClassFeePlanEditor() {
   const total = terms.reduce(
     (sum, t) => sum + t.items.reduce((s, i) => s + (Number(i.amount) || 0), 0),
     0,
+  )
+
+  const draftYearlyTerms: DraftYearlyTerm[] = useMemo(
+    () =>
+      terms.map((t) => ({
+        term_label: t.term_label,
+        term_due_date: t.due_date,
+        items: t.items.map((i) => ({
+          fee_category: i.fee_category,
+          custom_label: i.custom_label,
+          amount: i.amount,
+          due_date: i.due_date || t.due_date,
+        })),
+      })),
+    [terms],
   )
 
   const canEditSelected =
@@ -254,13 +319,21 @@ export function ClassFeePlanEditor() {
           <h1 className="text-3xl font-bold tracking-tight">Class fee plans</h1>
           <p className="text-muted-foreground mt-1">
             {canWrite
-              ? "1. Pick class → 2. Add terms & fee lines → 3. Save draft → 4. Submit to VP"
+              ? "Draft yearly class fees with a due date on every fee line. Submit to VP for approval — approved plans become fee structures for the accountant to send to parents."
               : "View term-wise class fee plans for this school."}
           </p>
         </div>
         {canSeeVpApprovals && (
           <Button variant="outline" asChild>
-            <Link to="/finance/fee-approvals">VP approvals</Link>
+            <Link
+              to={
+                activeRole === "vice_principal" || activeRole === "principal"
+                  ? "/finance/vp-fee-status"
+                  : "/finance/fee-approvals"
+              }
+            >
+              VP fee status
+            </Link>
           </Button>
         )}
       </div>
@@ -280,25 +353,28 @@ export function ClassFeePlanEditor() {
             <CardDescription>Drafts for VP approval — not the same as fee structures</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex flex-wrap gap-1">
-              {(
-                [
-                  ["drafts", "Drafts"],
-                  ["pending", "Pending VP"],
-                  ["approved", "Approved"],
-                ] as const
-              ).map(([tab, label]) => (
-                <Button
-                  key={tab}
-                  type="button"
-                  size="sm"
-                  variant={activeTab === tab ? "default" : "outline"}
-                  onClick={() => setTab(tab)}
-                >
-                  {label}
-                </Button>
-              ))}
-            </div>
+            <Tabs value={activeTab} onValueChange={(v) => setTab(v as PlanTab)}>
+              <TabsList className="w-full flex h-auto flex-wrap gap-1">
+                <TabsTrigger value="drafts" className="gap-1.5 flex-1 min-w-[100px]">
+                  Draft / rejected
+                  <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+                    {tabCounts.drafts}
+                  </Badge>
+                </TabsTrigger>
+                <TabsTrigger value="pending" className="gap-1.5 flex-1 min-w-[100px]">
+                  Pending VP
+                  <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+                    {tabCounts.pending}
+                  </Badge>
+                </TabsTrigger>
+                <TabsTrigger value="approved" className="gap-1.5 flex-1 min-w-[100px]">
+                  Approved
+                  <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+                    {tabCounts.approved}
+                  </Badge>
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
             {canWrite && activeTab === "drafts" && (
               <div className="flex gap-2">
                 <select
@@ -346,11 +422,8 @@ export function ClassFeePlanEditor() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive shrink-0"
-                          onClick={() => {
-                            if (window.confirm("Delete this draft fee plan?")) {
-                              deletePlanMut.mutate(p.id)
-                            }
-                          }}
+                          disabled={deletePlanMut.isPending}
+                          onClick={() => setDeletePlanId(p.id)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -359,6 +432,43 @@ export function ClassFeePlanEditor() {
                   )
                 })}
               </ul>
+            )}
+            {activeTab === "approved" && tabCounts.superseded > 0 && (
+              <div className="border-t pt-3 space-y-2">
+                <button
+                  type="button"
+                  className="text-sm text-muted-foreground hover:text-foreground w-full text-left"
+                  onClick={() => setShowSupersededHistory((v) => !v)}
+                >
+                  {showSupersededHistory ? "Hide" : "Show"} history — superseded ({tabCounts.superseded})
+                </button>
+                <p className="text-xs text-muted-foreground">
+                  Replaced when VP approved a newer plan for the same class and year.
+                </p>
+                {showSupersededHistory && (
+                  <ul className="space-y-1">
+                    {supersededPlans.map((p) => {
+                      const cls = p.classes as { name?: string } | null
+                      return (
+                        <li key={p.id}>
+                          <button
+                            type="button"
+                            className={`w-full text-left rounded-md px-2 py-1.5 text-sm hover:bg-muted text-muted-foreground ${
+                              selectedPlanId === p.id ? "bg-muted font-medium text-foreground" : ""
+                            }`}
+                            onClick={() => setSelectedPlanId(p.id)}
+                          >
+                            {cls?.name ?? "Class"} —{" "}
+                            <Badge variant="outline" className="ml-1 text-xs">
+                              superseded
+                            </Badge>
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -390,25 +500,13 @@ export function ClassFeePlanEditor() {
             {!selectedPlanId ? (
               <p className="text-muted-foreground text-sm">Choose a plan from the list or create one.</p>
             ) : !canEditSelected ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <p className="text-muted-foreground text-sm">
                   This plan is {selectedPlan?.status} and cannot be edited.
                 </p>
-                {terms.map((term, ti) => (
-                  <div key={ti} className="border rounded-lg p-3 text-sm space-y-1">
-                    <p className="font-medium">
-                      {term.term_label}
-                      {term.due_date ? ` · due ${term.due_date}` : ""}
-                    </p>
-                    <ul className="text-muted-foreground">
-                      {term.items.map((item, ii) => (
-                        <li key={ii}>
-                          {feeItemDisplayName(item)}: ₹{Number(item.amount).toLocaleString()}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
+                {selectedPlanId && (
+                  <ClassYearlyFeePlanSummary planId={selectedPlanId} />
+                )}
               </div>
             ) : (
               <>
@@ -428,13 +526,20 @@ export function ClassFeePlanEditor() {
                         />
                       </div>
                       <div>
-                        <Label className="text-xs">Due date</Label>
+                        <Label className="text-xs">Default due date</Label>
                         <Input
                           type="date"
                           value={term.due_date}
                           onChange={(e) => {
+                            const val = e.target.value
                             const next = [...terms]
-                            next[ti] = { ...next[ti], due_date: e.target.value }
+                            next[ti] = {
+                              ...next[ti],
+                              due_date: val,
+                              items: next[ti].items.map((item) =>
+                                item.amount > 0 && !item.due_date ? { ...item, due_date: val } : item,
+                              ),
+                            }
                             setTerms(next)
                           }}
                         />
@@ -464,7 +569,7 @@ export function ClassFeePlanEditor() {
                       )}
                     </div>
                     {term.items.map((item, ii) => (
-                      <div key={ii} className="grid grid-cols-[1fr_1fr_auto_auto] gap-2 items-end">
+                      <div key={ii} className="grid grid-cols-[1fr_1fr_auto_auto_auto] gap-2 items-end">
                         <div>
                           <Label className="text-xs">Category</Label>
                           <select
@@ -511,11 +616,28 @@ export function ClassFeePlanEditor() {
                             placeholder="Amount"
                             value={item.amount || ""}
                             onChange={(e) => {
+                              const amount = Number(e.target.value) || 0
                               const next = [...terms]
                               next[ti].items[ii] = {
                                 ...next[ti].items[ii],
-                                amount: Number(e.target.value) || 0,
+                                amount,
+                                due_date:
+                                  amount > 0 && !next[ti].items[ii].due_date
+                                    ? term.due_date
+                                    : next[ti].items[ii].due_date,
                               }
+                              setTerms(next)
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Due date</Label>
+                          <Input
+                            type="date"
+                            value={item.due_date}
+                            onChange={(e) => {
+                              const next = [...terms]
+                              next[ti].items[ii] = { ...next[ti].items[ii], due_date: e.target.value }
                               setTerms(next)
                             }}
                           />
@@ -542,7 +664,12 @@ export function ClassFeePlanEditor() {
                       size="sm"
                       onClick={() => {
                         const next = [...terms]
-                        next[ti].items.push({ fee_category: "tuition", custom_label: "", amount: 0 })
+                        next[ti].items.push({
+                          fee_category: "tuition",
+                          custom_label: "",
+                          amount: 0,
+                          due_date: term.due_date,
+                        })
                         setTerms(next)
                       }}
                     >
@@ -561,7 +688,7 @@ export function ClassFeePlanEditor() {
                         term_order: terms.length + 1,
                         term_label: `Term ${terms.length + 1}`,
                         due_date: "",
-                        items: [{ fee_category: "tuition", custom_label: "", amount: 0 }],
+                        items: [{ fee_category: "tuition", custom_label: "", amount: 0, due_date: "" }],
                       },
                     ])
                   }
@@ -581,7 +708,47 @@ export function ClassFeePlanEditor() {
             )}
           </CardContent>
         </Card>
+
+        {selectedPlanId && terms.length > 0 && (
+          <Card className="lg:col-span-3">
+            <ClassYearlyFeePlanSummary
+              planId={canEditSelected ? undefined : selectedPlanId}
+              draftTerms={canEditSelected ? draftYearlyTerms : undefined}
+              title="Yearly summary"
+            />
+          </Card>
+        )}
       </div>
+
+      <Dialog open={!!deletePlanId} onOpenChange={(open) => !open && setDeletePlanId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete draft fee plan?</DialogTitle>
+            <DialogDescription>
+              This permanently removes the draft and all its terms. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletePlanId(null)} disabled={deletePlanMut.isPending}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deletePlanMut.isPending}
+              onClick={() => {
+                if (deletePlanId) {
+                  deletePlanMut.mutate(deletePlanId, {
+                    onSettled: () => setDeletePlanId(null),
+                  })
+                }
+              }}
+            >
+              {deletePlanMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { ArrowRight, CalendarCheck, ClipboardList, GraduationCap, UserSquare2 } from "lucide-react"
+import { ArrowRight, CalendarCheck, ClipboardList, CreditCard, GraduationCap, UserSquare2 } from "lucide-react"
 import { Link } from "react-router-dom"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -136,6 +136,15 @@ export function ReceptionDashboard() {
               <CardDescription>
                 Student sick or leaving mid-day? Look up admission number, mark status, and add reason.
               </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+        <Link to="/admissions?tab=fee-guide" className="block">
+          <Card className="hover:bg-accent/50 transition-colors h-full">
+            <CardHeader>
+              <CreditCard className="h-8 w-8 text-primary mb-2" />
+              <CardTitle className="text-base">Fee catalog</CardTitle>
+              <CardDescription>VP-approved fee structure by class — share with parents during admission</CardDescription>
             </CardHeader>
           </Card>
         </Link>

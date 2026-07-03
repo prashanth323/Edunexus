@@ -81,7 +81,7 @@ export function PendingDuesReport() {
             <CardTitle className="text-sm font-medium">Total Outstanding</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-destructive">${totalDue.toLocaleString()}</div>
+            <div className="text-3xl font-bold text-destructive">₹{totalDue.toLocaleString()}</div>
           </CardContent>
         </Card>
         <Card>
@@ -143,7 +143,7 @@ export function PendingDuesReport() {
                         <td className="p-3 font-medium">{r.student_name}</td>
                         <td className="p-3 font-mono text-xs text-muted-foreground">{r.admission_no}</td>
                         <td className="p-3 whitespace-nowrap">{r.class_name} — {r.section_name}</td>
-                        <td className="p-3 text-right font-bold text-destructive">${r.total_due.toLocaleString()}</td>
+                        <td className="p-3 text-right font-bold text-destructive">₹{r.total_due.toLocaleString()}</td>
                         <td className="p-3 text-center">{r.invoices_count}</td>
                         <td className="p-3 whitespace-nowrap">{new Date(r.oldest_due_date).toLocaleDateString()}</td>
                         <td className="p-3">

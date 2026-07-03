@@ -83,3 +83,45 @@ export async function getMyWardHostelStatus(): Promise<WardHostelStatusRow[]> {
     room_label: row.room_label ? String(row.room_label) : null,
   }))
 }
+
+export type HostelStatusNotificationRow = {
+  id: string
+  title: string
+  body: string
+  created_at: string
+  student_name: string | null
+  admission_no: string | null
+}
+
+export async function getRecentHostelStatusNotifications(
+  limit = 8,
+  typeFilter: "vp" | "parent" | "all" = "all",
+): Promise<HostelStatusNotificationRow[]> {
+  let query = supabase
+    .from("school_notifications")
+    .select("id, title, body, created_at, metadata")
+    .order("created_at", { ascending: false })
+    .limit(limit)
+
+  if (typeFilter === "vp") {
+    query = query.eq("type", "hostel_status_vp")
+  } else if (typeFilter === "parent") {
+    query = query.eq("type", "hostel_status_parent")
+  } else {
+    query = query.like("type", "hostel_status_%")
+  }
+
+  const { data, error } = await query
+  if (error) throw error
+  return (data ?? []).map((row) => {
+    const meta = (row.metadata ?? {}) as Record<string, unknown>
+    return {
+      id: String(row.id),
+      title: String(row.title),
+      body: String(row.body),
+      created_at: String(row.created_at),
+      student_name: meta.student_name ? String(meta.student_name) : null,
+      admission_no: meta.admission_no ? String(meta.admission_no) : null,
+    }
+  })
+}

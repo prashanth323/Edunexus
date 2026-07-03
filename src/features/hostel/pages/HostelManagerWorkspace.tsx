@@ -73,9 +73,11 @@ export function HostelManagerWorkspace() {
       return result
     },
     onSuccess: () => {
-      toast.success("Status updated — recorded on student profile")
+      toast.success("Status updated — parent and Vice Principal notified")
       qc.invalidateQueries({ queryKey: ["hostel-residents", activeSchoolId] })
       qc.invalidateQueries({ queryKey: ["student-hostel-status"] })
+      qc.invalidateQueries({ queryKey: ["hostel-status-notifications"] })
+      qc.invalidateQueries({ queryKey: ["ward-hostel-status"] })
     },
     onError: (e: Error) => toast.error(e.message),
   })

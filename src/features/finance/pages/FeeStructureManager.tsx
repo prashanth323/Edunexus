@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query"
 import { Link } from "react-router-dom"
-import { Plus, Loader2, Trash2, DollarSign, Calendar, Send, Info } from "lucide-react"
+import { Plus, Loader2, Trash2, DollarSign, Calendar, Info } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -15,12 +15,13 @@ import {
   getFeeStructures,
   createFeeStructure,
   deleteFeeStructure,
-  generateBulkInvoices,
   groupFeeStructuresByClassAndTerm,
   type FeeStructureInput,
 } from "../api/feeManagement.api"
 import { feeCategoryLabel } from "../lib/feeCategories"
-import { getSectionsForSchool } from "@/features/exams/api/exams.api"
+import { ClassYearlyFeePlanSummary } from "../components/ClassYearlyFeePlanSummary"
+import { ApprovedYearlyFeePlansPanel } from "../components/ApprovedYearlyFeePlansPanel"
+import { getSchoolApprovedFeePlans } from "../api/feePlans.api"
 
 const FREQUENCIES = [
   { value: "monthly", label: "Monthly" },
@@ -39,13 +40,12 @@ export function FeeStructureManager({ embedded = false }: FeeStructureManagerPro
   const activeRole = useAuth((s) => s.activeRole)
   const qc = useQueryClient()
   const [creating, setCreating] = useState(false)
-  const [assigning, setAssigning] = useState<string | null>(null)
 
   const isHeadAccountant = activeRole === "head_accountant"
   const isAccountant = activeRole === "accountant"
+  const showYearlyOnly = !embedded && (isAccountant || isHeadAccountant)
   const canCreate = false
   const canDelete = false
-  const canAssign = isAccountant
 
   // Fee structures
   const { data: structures = [], isLoading } = useQuery({
@@ -54,17 +54,16 @@ export function FeeStructureManager({ embedded = false }: FeeStructureManagerPro
     enabled: !!activeSchoolId,
   })
 
+  const { data: approvedPlans = [] } = useQuery({
+    queryKey: ["school-approved-fee-plans", activeSchoolId],
+    queryFn: () => getSchoolApprovedFeePlans(activeSchoolId!),
+    enabled: !!activeSchoolId && showYearlyOnly,
+  })
+
   const groupedStructures = useMemo(
     () => groupFeeStructuresByClassAndTerm(structures),
     [structures],
   )
-
-  // Sections for bulk assignment
-  const { data: sections = [] } = useQuery({
-    queryKey: ["sections-fee", activeSchoolId],
-    queryFn: () => getSectionsForSchool(activeSchoolId!),
-    enabled: !!activeSchoolId && assigning !== null,
-  })
 
   // Create form state
   const [form, setForm] = useState<FeeStructureInput>({
@@ -106,32 +105,6 @@ export function FeeStructureManager({ embedded = false }: FeeStructureManagerPro
     onError: () => toast.error("Failed to remove"),
   })
 
-  // Bulk assign state
-  const [assignSectionId, setAssignSectionId] = useState("")
-  const [assignDueDate, setAssignDueDate] = useState("")
-  const [assignDesc, setAssignDesc] = useState("")
-  const [bulkGenerating, setBulkGenerating] = useState(false)
-
-  async function handleBulkGenerate() {
-    if (!activeSchoolId || !assigning || !assignSectionId || !assignDueDate) {
-      toast.error("Select a section and due date")
-      return
-    }
-    setBulkGenerating(true)
-    try {
-      const count = await generateBulkInvoices(activeSchoolId, assigning, assignSectionId, assignDueDate, assignDesc)
-      toast.success(`${count} invoices generated successfully`)
-      setAssigning(null)
-      setAssignSectionId("")
-      setAssignDueDate("")
-      setAssignDesc("")
-    } catch (err: any) {
-      toast.error(err.message || "Failed to generate invoices")
-    } finally {
-      setBulkGenerating(false)
-    }
-  }
-
   if (isLoading) {
     return (
       <div className="flex flex-col gap-6 animate-in fade-in duration-500">
@@ -153,7 +126,7 @@ export function FeeStructureManager({ embedded = false }: FeeStructureManagerPro
               {isHeadAccountant
                 ? "VP-approved fee structures created from your class fee plans (read-only)."
                 : isAccountant
-                  ? "VP-approved fee structures — assign to sections to generate student invoices."
+                  ? "VP-approved class fee structures — invoices publish automatically on approval."
                   : "View VP-approved fee structures used for invoice generation."}
             </p>
           </div>
@@ -181,13 +154,23 @@ export function FeeStructureManager({ embedded = false }: FeeStructureManagerPro
         </Card>
       )}
 
+      {showYearlyOnly && activeSchoolId && (
+        <ApprovedYearlyFeePlansPanel
+          schoolId={activeSchoolId}
+          showPaymentStatus
+          description="VP-approved class fees with payment status per line."
+        />
+      )}
+
       {!embedded && isAccountant && (
         <Card className="border-muted">
           <CardContent className="py-3 text-sm text-muted-foreground">
-            Select a fee structure below and assign it to a section to generate invoices.
+            VP-approved structures with due dates. New approvals auto-publish invoices to all students in that class. Use Fee dues &amp; notify to remind parents and record payments.
           </CardContent>
         </Card>
       )}
+
+      {/* Legacy manual publish removed — VP approval auto-publishes invoices */}
 
       {/* Create form */}
       {creating && (
@@ -212,7 +195,7 @@ export function FeeStructureManager({ embedded = false }: FeeStructureManagerPro
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Amount ($)</Label>
+                  <Label>Amount (₹)</Label>
                   <Input
                     type="number"
                     min={0}
@@ -244,7 +227,7 @@ export function FeeStructureManager({ embedded = false }: FeeStructureManagerPro
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Late Fine ($/day)</Label>
+                  <Label>Late Fine (₹/day)</Label>
                   <Input
                     type="number"
                     min={0}
@@ -275,56 +258,8 @@ export function FeeStructureManager({ embedded = false }: FeeStructureManagerPro
         </Card>
       )}
 
-      {/* Bulk assign modal */}
-      {assigning && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm"
-          onMouseDown={(e) => { if (e.target === e.currentTarget) setAssigning(null) }}
-        >
-          <Card className="w-full max-w-md shadow-xl">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Send className="h-5 w-5 text-primary" />
-                Generate Invoices
-              </CardTitle>
-              <CardDescription>
-                Assign <strong>{structures.find((s) => s.id === assigning)?.name}</strong> to all students in a class/section.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-1.5">
-                <Label>Class / Section</Label>
-                <select
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={assignSectionId}
-                  onChange={(e) => setAssignSectionId(e.target.value)}
-                >
-                  <option value="">Select…</option>
-                  {sections.map((s: any) => <option key={s.id} value={s.id}>{s.label}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Due Date</Label>
-                <Input type="date" value={assignDueDate} onChange={(e) => setAssignDueDate(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Description (optional)</Label>
-                <Input value={assignDesc} onChange={(e) => setAssignDesc(e.target.value)} placeholder="e.g. Term 1 Tuition" />
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <Button variant="outline" onClick={() => setAssigning(null)}>Cancel</Button>
-                <Button onClick={handleBulkGenerate} disabled={bulkGenerating || !assignSectionId || !assignDueDate}>
-                  {bulkGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Generate Invoices
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Fee structure cards grouped by class and term */}
-      {groupedStructures.length === 0 && !creating ? (
+      {/* Fee structure cards grouped by class and term — hidden for accountant/HA (yearly panel above) */}
+      {!showYearlyOnly && groupedStructures.length === 0 && !creating ? (
         <div className="flex flex-col items-center justify-center py-16 border-2 border-dashed rounded-xl text-muted-foreground">
           <DollarSign className="h-14 w-14 opacity-30 mb-4" />
           <h3 className="text-lg font-semibold text-foreground">No fee structures</h3>
@@ -334,11 +269,23 @@ export function FeeStructureManager({ embedded = false }: FeeStructureManagerPro
               : "Approved fee structures from class fee plans will appear here."}
           </p>
         </div>
-      ) : (
+      ) : !showYearlyOnly ? (
         <div className="space-y-8">
-          {groupedStructures.map((classGroup) => (
+          {groupedStructures.map((classGroup) => {
+            const planId = classGroup.terms
+              .flatMap((t) => t.items)
+              .map((fs) => fs.class_fee_plan_id)
+              .find((id) => id) ?? null
+            return (
             <div key={classGroup.classId} className="space-y-4">
               <h2 className="text-lg font-semibold">{classGroup.className}</h2>
+              {planId && !isAccountant && (
+                <ClassYearlyFeePlanSummary
+                  planId={planId}
+                  compact
+                  title={`${classGroup.className} — approved yearly plan`}
+                />
+              )}
               {classGroup.terms.map((term) => (
                 <div key={`${classGroup.classId}-${term.termOrder}`} className="space-y-3">
                   <h3 className="text-sm font-medium text-muted-foreground">
@@ -380,20 +327,9 @@ export function FeeStructureManager({ embedded = false }: FeeStructureManagerPro
                           )}
                         </CardContent>
                         <CardFooter className="border-t pt-3 flex gap-2">
-                          {canAssign ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="flex-1 gap-1.5"
-                              onClick={() => setAssigning(fs.id)}
-                            >
-                              <Send className="h-3.5 w-3.5" /> Assign to section
-                            </Button>
-                          ) : (
-                            <p className="text-xs text-muted-foreground">
-                              Read-only — set via VP-approved class fee plans.
-                            </p>
-                          )}
+                          <p className="text-xs text-muted-foreground">
+                            Read-only — set via VP-approved class fee plans.
+                          </p>
                           {canDelete && (
                             <Button
                               variant="ghost"
@@ -411,9 +347,20 @@ export function FeeStructureManager({ embedded = false }: FeeStructureManagerPro
                 </div>
               ))}
             </div>
-          ))}
+            )
+          })}
         </div>
-      )}
+      ) : showYearlyOnly && approvedPlans.length === 0 && !creating ? (
+        <div className="flex flex-col items-center justify-center py-16 border-2 border-dashed rounded-xl text-muted-foreground">
+          <DollarSign className="h-14 w-14 opacity-30 mb-4" />
+          <h3 className="text-lg font-semibold text-foreground">No approved fee plans</h3>
+          <p className="text-sm mt-1 max-w-md text-center">
+            {isHeadAccountant
+              ? "Submit a class fee plan for VP approval — one yearly structure will appear per grade."
+              : "After VP approves class fee plans, one yearly structure will appear per grade."}
+          </p>
+        </div>
+      ) : null}
     </div>
   )
 }

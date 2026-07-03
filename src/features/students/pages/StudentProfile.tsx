@@ -18,6 +18,7 @@ import {
   Save,
   User,
   Users,
+  Building2,
   Bus,
   Home,
   ExternalLink,
@@ -82,11 +83,15 @@ const editSchema = z.object({
   address_city: z.string().nullable(),
   address_state: z.string().nullable(),
   address_zip: z.string().nullable(),
+  previous_school_name: z.string().nullable(),
+  previous_school_board: z.string().nullable(),
+  previous_class_or_year: z.string().nullable(),
+  previous_school_city: z.string().nullable(),
 })
 
 type EditValues = z.infer<typeof editSchema>
 
-const CAN_MANAGE_ACADEMICS = new Set(["principal", "school_admin", "vice_principal", "accountant"])
+const CAN_MANAGE_ACADEMICS = new Set(["principal", "school_admin", "vice_principal"])
 
 type StudentProfileProps = {
   portalMode?: boolean
@@ -150,7 +155,8 @@ export function StudentProfile({ portalMode = false, studentIdOverride }: Studen
     enabled: !!effectiveStudentId,
   })
 
-  const canEdit = !portalMode && (editAccess?.allowed ?? false)
+  const canEdit =
+    !portalMode && activeRole !== "accountant" && (editAccess?.allowed ?? false)
   const canManageAcademics = CAN_MANAGE_ACADEMICS.has(activeRole ?? "")
   const showPortalCredentials = !portalMode && canViewPortalCredentials(activeRole)
   const canManageHostel = HOSTEL_ACCESS.has(activeRole ?? "")
@@ -189,6 +195,10 @@ export function StudentProfile({ portalMode = false, studentIdOverride }: Studen
       address_city: null,
       address_state: null,
       address_zip: null,
+      previous_school_name: null,
+      previous_school_board: null,
+      previous_class_or_year: null,
+      previous_school_city: null,
     },
   })
 
@@ -210,6 +220,10 @@ export function StudentProfile({ portalMode = false, studentIdOverride }: Studen
       address_city: addr.city ?? null,
       address_state: addr.state ?? null,
       address_zip: addr.zip ?? null,
+      previous_school_name: student.previous_school_name ?? null,
+      previous_school_board: student.previous_school_board ?? null,
+      previous_class_or_year: student.previous_class_or_year ?? null,
+      previous_school_city: student.previous_school_city ?? null,
     })
     setEditing(true)
   }
@@ -290,6 +304,12 @@ export function StudentProfile({ portalMode = false, studentIdOverride }: Studen
   const fullName = `${student.first_name} ${student.last_name}`
   const enrollment = student.enrollment
   const totalPending = student.invoices.reduce((sum, inv) => sum + Number(inv.due_amount ?? 0), 0)
+  const hasPreviousSchool = Boolean(
+    student.previous_school_name ||
+      student.previous_school_board ||
+      student.previous_class_or_year ||
+      student.previous_school_city,
+  )
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500 max-w-5xl mx-auto">
@@ -433,6 +453,39 @@ export function StudentProfile({ portalMode = false, studentIdOverride }: Studen
             </p>
           </CardContent>
         </Card>
+
+        {hasPreviousSchool && (
+          <Card className="sm:col-span-2 lg:col-span-4">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Previous school</CardTitle>
+              <Building2 className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-2 sm:grid-cols-2 text-sm">
+                {student.previous_school_name && (
+                  <p>
+                    <span className="text-muted-foreground">School:</span> {student.previous_school_name}
+                  </p>
+                )}
+                {student.previous_school_board && (
+                  <p>
+                    <span className="text-muted-foreground">Board:</span> {student.previous_school_board}
+                  </p>
+                )}
+                {student.previous_class_or_year && (
+                  <p>
+                    <span className="text-muted-foreground">Last class / year:</span> {student.previous_class_or_year}
+                  </p>
+                )}
+                {student.previous_school_city && (
+                  <p>
+                    <span className="text-muted-foreground">City:</span> {student.previous_school_city}
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -617,6 +670,30 @@ export function StudentProfile({ portalMode = false, studentIdOverride }: Studen
                           <FormField control={form.control} name="address_zip" render={({ field }) => (
                             <FormItem><FormLabel>PIN / ZIP</FormLabel><FormControl><Input {...field} value={field.value || ""} /></FormControl></FormItem>
                           )} />
+                          <FormField control={form.control} name="previous_school_name" render={({ field }) => (
+                            <FormItem className="sm:col-span-2">
+                              <FormLabel>Previous school name</FormLabel>
+                              <FormControl><Input {...field} value={field.value || ""} /></FormControl>
+                            </FormItem>
+                          )} />
+                          <FormField control={form.control} name="previous_school_board" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Board</FormLabel>
+                              <FormControl><Input {...field} value={field.value || ""} placeholder="e.g. CBSE, ICSE" /></FormControl>
+                            </FormItem>
+                          )} />
+                          <FormField control={form.control} name="previous_class_or_year" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Last class / year</FormLabel>
+                              <FormControl><Input {...field} value={field.value || ""} /></FormControl>
+                            </FormItem>
+                          )} />
+                          <FormField control={form.control} name="previous_school_city" render={({ field }) => (
+                            <FormItem className="sm:col-span-2">
+                              <FormLabel>City</FormLabel>
+                              <FormControl><Input {...field} value={field.value || ""} /></FormControl>
+                            </FormItem>
+                          )} />
                         </div>
                         <div className="flex gap-3 pt-2">
                           <Button type="submit" disabled={saving}>
@@ -642,6 +719,14 @@ export function StudentProfile({ portalMode = false, studentIdOverride }: Studen
                         value={student.address ? [student.address.street, student.address.city, student.address.state, student.address.zip].filter(Boolean).join(", ") : null}
                         className="sm:col-span-2"
                       />
+                      {hasPreviousSchool && (
+                        <>
+                          <InfoRow label="Previous school" value={student.previous_school_name} />
+                          <InfoRow label="Board" value={student.previous_school_board} />
+                          <InfoRow label="Last class / year" value={student.previous_class_or_year} />
+                          <InfoRow label="Previous school city" value={student.previous_school_city} />
+                        </>
+                      )}
                       {student.medical_info && Object.keys(student.medical_info).length > 0 && (
                         <InfoRow
                           label="Medical notes"

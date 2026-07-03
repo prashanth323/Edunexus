@@ -107,7 +107,7 @@ export const SIDEBAR_LINKS: NavLink[] = [
     title: "Students",
     href: "/students",
     icon: GraduationCap,
-    roles: [...ADMIN_STUDENTS, "class_teacher", "accountant", "receptionist"],
+    roles: [...ADMIN_STUDENTS, "class_teacher", "receptionist"],
   },
   {
     title: "Admissions",
@@ -186,13 +186,13 @@ export const SIDEBAR_LINKS: NavLink[] = [
     title: "Fee structures",
     href: "/finance/fee-structures",
     icon: CreditCard,
-    roles: ["accountant", "head_accountant", "operations_admin", "school_admin"],
+    roles: ["accountant", "head_accountant", "operations_admin", "school_admin", "finance_admin"],
   },
   {
     title: "Fee dues & notify",
     href: "/finance/dues",
     icon: CreditCard,
-    roles: ["accountant", "operations_admin", "school_admin"],
+    roles: ["accountant", "operations_admin", "school_admin", "finance_admin"],
   },
   {
     title: "Overdue fee dues",
@@ -361,7 +361,7 @@ export function getRolesAllowedForPath(pathname: string): readonly string[] | nu
   }
 
   if (normalized === "/finance/fee-structures" || normalized.startsWith("/finance/fee-structures/")) {
-    return ["operations_admin", "school_admin", "head_accountant", "accountant"]
+    return ["operations_admin", "school_admin", "head_accountant", "accountant", "finance_admin"]
   }
 
   if (normalized === "/finance/pending-dues" || normalized.startsWith("/finance/pending-dues/")) {

@@ -20,6 +20,7 @@ import { getOverdueFeeDuesCount } from "@/features/finance/api/feeManagement.api
 import { getPendingBuses, getPendingRoutes } from "@/features/transport/api/transport.api"
 import { getPendingHostelRooms } from "@/features/hostel/api/hostel.api"
 import { getSectionAttendanceSnapshot } from "@/features/attendance/api/attendance.api"
+import { HostelStatusAlertsPanel } from "@/features/hostel/components/HostelStatusAlertsPanel"
 
 export function VpDashboard() {
   const activeSchoolId = useAuth((s) => s.activeSchoolId)
@@ -247,6 +248,13 @@ export function VpDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <HostelStatusAlertsPanel
+        title="Hostel resident updates"
+        description="Status changes recorded by hostel staff — for Vice Principal review."
+        limit={10}
+        audience="vp"
+      />
 
       <PrincipalDashboard
         title="Vice Principal Dashboard"

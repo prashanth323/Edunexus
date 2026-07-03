@@ -49,7 +49,7 @@ export function StudentTimetablePage() {
           <div>
             <p className="font-semibold text-muted-foreground">No timetable available</p>
             <p className="text-sm text-muted-foreground/70 mt-1">
-              Your class timetable will appear here once the principal has set it up.
+              Your class timetable will appear here after the principal has approved and published it.
             </p>
           </div>
         </div>

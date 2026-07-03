@@ -58,8 +58,8 @@ import { supabase } from "@/lib/supabase"
 /** Stable when the query has no `data` yet — a fresh `[]` each render makes `useReactTable` think data changed every time (infinite re-renders). */
 const EMPTY_STUDENTS: Student[] = []
 
-/** Matches RLS: `principal`, `school_admin`, `vice_principal`, and `accountant` may manage students. */
-const CAN_MANAGE_ACADEMICS = new Set(["principal", "school_admin", "vice_principal", "accountant"])
+/** Principals and admins manage classes, sections, and portal invites — not accountants. */
+const CAN_MANAGE_ACADEMICS = new Set(["principal", "school_admin", "vice_principal"])
 
 function baseStudentColumns(): ColumnDef<Student>[] {
   return [
@@ -221,7 +221,7 @@ export function StudentsList() {
   })
 
   const students = data ?? EMPTY_STUDENTS
-  const rowActionsViewOnly = isClassTeacher
+  const rowActionsViewOnly = isClassTeacher || activeRole === "accountant"
 
   const { data: pendingLogins = [] } = useQuery({
     queryKey: ["students-pending-login", activeSchoolId],

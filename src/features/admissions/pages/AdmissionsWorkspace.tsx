@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Check, ClipboardList, FileUp, Plus, Send } from "lucide-react"
-import { Link } from "react-router-dom"
+import { Link, useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -139,6 +139,14 @@ export function AdmissionsWorkspace() {
   const isAdmissionManager = activeRole === "admission_manager"
 
   const [activeTab, setActiveTab] = useState("queue")
+  const [searchParams] = useSearchParams()
+
+  useEffect(() => {
+    const tab = searchParams.get("tab")
+    if (tab === "fee-guide" && canViewFeeCatalog) {
+      setActiveTab("fee-guide")
+    }
+  }, [searchParams, canViewFeeCatalog])
   const [reviewApp, setReviewApp] = useState<Application | null>(null)
 
   // New application form state
@@ -147,7 +155,10 @@ export function AdmissionsWorkspace() {
   const [dob, setDob] = useState("")
   const [gender, setGender] = useState("")
   const [address, setAddress] = useState("")
-  const [previousSchool, setPreviousSchool] = useState("")
+  const [previousSchoolName, setPreviousSchoolName] = useState("")
+  const [previousSchoolBoard, setPreviousSchoolBoard] = useState("")
+  const [previousClassOrYear, setPreviousClassOrYear] = useState("")
+  const [previousSchoolCity, setPreviousSchoolCity] = useState("")
   const [identityNumber, setIdentityNumber] = useState("")
   const [parentName, setParentName] = useState("")
   const [parentPhone, setParentPhone] = useState("")
@@ -258,7 +269,10 @@ export function AdmissionsWorkspace() {
     setDob("")
     setGender("")
     setAddress("")
-    setPreviousSchool("")
+    setPreviousSchoolName("")
+    setPreviousSchoolBoard("")
+    setPreviousClassOrYear("")
+    setPreviousSchoolCity("")
     setIdentityNumber("")
     setParentName("")
     setParentPhone("")
@@ -310,7 +324,10 @@ export function AdmissionsWorkspace() {
           date_of_birth: dob || undefined,
           gender: gender || undefined,
           address: address.trim() || undefined,
-          previous_school: previousSchool.trim() || undefined,
+          previous_school_name: previousSchoolName.trim() || undefined,
+          previous_school_board: previousSchoolBoard.trim() || undefined,
+          previous_class_or_year: previousClassOrYear.trim() || undefined,
+          previous_school_city: previousSchoolCity.trim() || undefined,
         },
       })
 
@@ -562,10 +579,35 @@ export function AdmissionsWorkspace() {
                     <Input value={address} onChange={(e) => setAddress(e.target.value)} />
                   </div>
                   <div className="grid gap-1.5 sm:col-span-2">
-                    <Label>Previous school</Label>
+                    <Label className="text-muted-foreground">Previous school (optional)</Label>
+                  </div>
+                  <div className="grid gap-1.5 sm:col-span-2">
+                    <Label>School name</Label>
                     <Input
-                      value={previousSchool}
-                      onChange={(e) => setPreviousSchool(e.target.value)}
+                      value={previousSchoolName}
+                      onChange={(e) => setPreviousSchoolName(e.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label>Board</Label>
+                    <Input
+                      value={previousSchoolBoard}
+                      onChange={(e) => setPreviousSchoolBoard(e.target.value)}
+                      placeholder="e.g. CBSE, ICSE"
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label>Last class / year</Label>
+                    <Input
+                      value={previousClassOrYear}
+                      onChange={(e) => setPreviousClassOrYear(e.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-1.5 sm:col-span-2">
+                    <Label>City</Label>
+                    <Input
+                      value={previousSchoolCity}
+                      onChange={(e) => setPreviousSchoolCity(e.target.value)}
                     />
                   </div>
                 </div>

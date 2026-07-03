@@ -67,19 +67,56 @@ Deno.serve(async (req) => {
       title = row.title
       const meta = (row.metadata ?? {}) as Record<string, unknown>
       const feeLines = Array.isArray(meta.fee_lines) ? meta.fee_lines : null
-      if (feeLines?.length) {
+      const termPlan = meta.term_plan as Record<string, unknown> | undefined
+      const termLabel = meta.term_label ? String(meta.term_label) : null
+
+      if (termPlan?.items && Array.isArray(termPlan.items)) {
+        const label = termLabel ?? String(termPlan.term_label ?? "Term")
+        const lines = (termPlan.items as Record<string, unknown>[]).map((item) => {
+          const name = String(item.name ?? "Fee")
+          const amount = item.amount != null ? `₹${Number(item.amount).toLocaleString()}` : ""
+          const due = item.due_date ? ` — due ${String(item.due_date)}` : ""
+          return `  • ${name}: ${amount}${due}`
+        })
+        const subtotal =
+          meta.term_subtotal != null
+            ? `\n\n${label} subtotal: ₹${Number(meta.term_subtotal).toLocaleString()}`
+            : ""
+        emailBody = `${row.body}\n\n${label} fee breakdown:\n${lines.join("\n")}${subtotal}`
+      } else if (feeLines?.length) {
+        const studentName = meta.student_name ? String(meta.student_name) : null
+        const admissionNo = meta.admission_no ? String(meta.admission_no) : null
+        const className = meta.class_name ? String(meta.class_name) : null
+        const sectionName = meta.section_name ? String(meta.section_name) : null
+        const studentHeaderParts: string[] = []
+        if (studentName) studentHeaderParts.push(`Student: ${studentName}`)
+        if (admissionNo) studentHeaderParts.push(`Adm: ${admissionNo}`)
+        if (className) {
+          studentHeaderParts.push(
+            `Class: ${className}${sectionName ? ` – ${sectionName}` : ""}`,
+          )
+        }
+        const studentHeader =
+          studentHeaderParts.length > 0 ? `${studentHeaderParts.join(" | ")}\n\n` : ""
+
         const breakdown = feeLines
           .map((line: Record<string, unknown>) => {
             const name = String(line.name ?? "Fee")
             const amount = line.amount != null ? `₹${Number(line.amount).toLocaleString()}` : ""
             const due = line.due_date ? ` (due ${String(line.due_date)})` : ""
-            return `  • ${name}: ${amount}${due}`
+            const term = line.term_label ? ` [${String(line.term_label)}]` : termLabel ? ` [${termLabel}]` : ""
+            return `  • ${name}${term}: ${amount}${due}`
           })
           .join("\n")
         const lastPay = meta.last_date_to_pay
           ? `\n\nLast date to pay: ${String(meta.last_date_to_pay)}`
           : ""
-        emailBody = `${row.body}\n\nFee breakdown:\n${breakdown}${lastPay}`
+        const termHeader = termLabel ? `\n\n${termLabel} fees:\n` : "\n\nFee breakdown:\n"
+        const subtotal =
+          meta.term_subtotal != null
+            ? `\n\nTerm subtotal: ₹${Number(meta.term_subtotal).toLocaleString()}`
+            : ""
+        emailBody = `${studentHeader}${row.body}${termHeader}${breakdown}${lastPay}${subtotal}`
       } else {
         emailBody = row.body
       }

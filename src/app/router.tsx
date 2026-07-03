@@ -3,6 +3,7 @@ import { AppShell } from "@/components/layout/AppShell"
 import { AuthGuard } from "@/features/auth/components/AuthGuard"
 import { RequireRole } from "@/features/auth/components/RequireRole"
 import { LoginPage } from "@/features/auth/pages/LoginPage"
+import { SetPasswordPage } from "@/features/auth/pages/SetPasswordPage"
 import { CompleteProfilePage } from "@/features/auth/pages/CompleteProfilePage"
 import { DashboardRouter } from "@/features/dashboard/DashboardRouter"
 import { StudentsList } from "@/features/students/pages/StudentsList"
@@ -47,6 +48,11 @@ export const router = createBrowserRouter([
   {
     path: "/login",
     element: <LoginPage />,
+    errorElement: <RootError />,
+  },
+  {
+    path: "/auth/set-password",
+    element: <SetPasswordPage />,
     errorElement: <RootError />,
   },
   {

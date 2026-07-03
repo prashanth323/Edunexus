@@ -14,6 +14,8 @@ type SlotEditorProps = {
   onClose: () => void
   sectionId: string
   schoolId: string
+  batchId: string
+  batchStatus?: string
   day: number
   period: number
   existing?: TimetableSlot
@@ -26,6 +28,8 @@ export function TimetableSlotEditor({
   onClose,
   sectionId,
   schoolId,
+  batchId,
+  batchStatus,
   day,
   period,
   existing,
@@ -55,7 +59,10 @@ export function TimetableSlotEditor({
     }
   }, [existing, open])
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["timetable-section", sectionId] })
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["timetable-section", sectionId] })
+    qc.invalidateQueries({ queryKey: ["timetable-batches"] })
+  }
 
   const upsertMut = useMutation({
     mutationFn: () => {
@@ -65,6 +72,7 @@ export function TimetableSlotEditor({
         id: existing?.timetable_id,
         school_id: schoolId,
         section_id: sectionId,
+        batch_id: batchId,
         subject_id: subjectId,
         staff_id: staffId || null,
         day_of_week: day,
@@ -75,7 +83,16 @@ export function TimetableSlotEditor({
       })
     },
     onSuccess: () => {
-      toast.success(existing ? "Slot updated" : "Slot added")
+      const pending = batchStatus === "pending_approval"
+      toast.success(
+        existing
+          ? pending
+            ? "Slot updated — still pending principal approval"
+            : "Slot updated — saved as draft"
+          : pending
+            ? "Slot added — still pending principal approval"
+            : "Slot added — saved as draft",
+      )
       invalidate()
       onClose()
     },

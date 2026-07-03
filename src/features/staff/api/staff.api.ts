@@ -177,6 +177,13 @@ export async function updateStaffProfileByAdmin(
   if (error) throw error
 }
 
+export async function deactivateStaffMember(staffId: string): Promise<void> {
+  const { error } = await supabase.rpc("deactivate_school_staff", {
+    p_staff_id: staffId,
+  })
+  if (error) throw error
+}
+
 export type StaffTeachingRoles = {
   subjectTeacher: boolean
   classTeacher: boolean

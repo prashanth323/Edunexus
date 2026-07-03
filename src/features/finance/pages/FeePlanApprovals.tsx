@@ -7,22 +7,13 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { useAuth } from "@/features/auth/hooks/useAuth"
 import {
-  getFeePlanWithTerms,
   getPendingFeePlans,
   reviewClassFeePlan,
   type ClassFeePlan,
 } from "../api/feePlans.api"
-import { feeCategoryLabel, feeItemDisplayName } from "../lib/feeCategories"
+import { ClassYearlyFeePlanSummary } from "../components/ClassYearlyFeePlanSummary"
 
 function FeePlanReviewCard({
   plan,
@@ -37,17 +28,7 @@ function FeePlanReviewCard({
   onReview: (approve: boolean) => void
   isPending: boolean
 }) {
-  const { data, isLoading } = useQuery({
-    queryKey: ["fee-plan-review-detail", plan.id],
-    queryFn: () => getFeePlanWithTerms(plan.id),
-  })
-
   const cls = plan.classes as { name?: string } | null
-  const terms = data?.terms ?? []
-  const grandTotal = terms.reduce(
-    (sum, t) => sum + (t.items ?? []).reduce((s, i) => s + Number(i.amount), 0),
-    0,
-  )
 
   return (
     <Card>
@@ -56,54 +37,7 @@ function FeePlanReviewCard({
         <Badge>pending VP</Badge>
       </CardHeader>
       <CardContent className="space-y-4">
-        {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading breakdown…</p>
-        ) : terms.length === 0 ? (
-          <p className="text-sm text-destructive">No terms defined in this plan.</p>
-        ) : (
-          <div className="space-y-4">
-            {terms.map((term) => {
-              const termTotal = (term.items ?? []).reduce((s, i) => s + Number(i.amount), 0)
-              return (
-                <div key={term.id} className="border rounded-lg overflow-hidden">
-                  <div className="bg-muted/50 px-3 py-2 flex flex-wrap justify-between gap-2 text-sm">
-                    <span className="font-medium">{term.term_label}</span>
-                    <span className="text-muted-foreground">
-                      Due: {term.due_date ? new Date(term.due_date + "T12:00:00").toLocaleDateString() : "—"}
-                      {" · "}
-                      Subtotal: ₹{termTotal.toLocaleString()}
-                    </span>
-                  </div>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Category</TableHead>
-                        <TableHead>Fee component</TableHead>
-                        <TableHead className="text-right">Amount</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(term.items ?? []).map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="capitalize text-muted-foreground">
-                            {feeCategoryLabel(item.fee_category, item.custom_label)}
-                          </TableCell>
-                          <TableCell>{feeItemDisplayName(item)}</TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            ₹{Number(item.amount).toLocaleString()}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )
-            })}
-            <p className="text-sm font-semibold text-right">
-              Grand total: ₹{grandTotal.toLocaleString()}
-            </p>
-          </div>
-        )}
+        <ClassYearlyFeePlanSummary planId={plan.id} title={`${cls?.name ?? "Class"} — yearly structure`} />
 
         <Textarea
           placeholder="Notes (optional for rejection)"
@@ -112,7 +46,7 @@ function FeePlanReviewCard({
           rows={2}
         />
         <div className="flex gap-2">
-          <Button onClick={() => onReview(true)} disabled={isPending || isLoading}>
+          <Button onClick={() => onReview(true)} disabled={isPending}>
             <Check className="h-4 w-4 mr-1" /> Approve
           </Button>
           <Button variant="destructive" onClick={() => onReview(false)} disabled={isPending}>

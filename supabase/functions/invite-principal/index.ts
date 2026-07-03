@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
   }
 
   const site = Deno.env.get("SITE_URL") ?? Deno.env.get("PUBLIC_SITE_URL")
-  const redirectTo = site ? `${site.replace(/\/$/, "")}/login` : undefined
+  const redirectTo = site ? `${site.replace(/\/$/, "")}/auth/set-password` : undefined
 
   const { data: invited, error: invErr } = await admin.auth.admin.inviteUserByEmail(email, {
     data: {

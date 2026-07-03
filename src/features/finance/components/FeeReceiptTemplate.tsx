@@ -95,23 +95,23 @@ export function FeeReceiptTemplate({ data }: { data: ReceiptData }) {
                 <tbody>
                   <tr style={{ borderTop: "1px solid #e5e7eb" }}>
                     <td style={{ padding: "10px 12px" }}>{data.description}</td>
-                    <td style={{ padding: "10px 12px", textAlign: "right" }}>${data.amount.toLocaleString()}</td>
+                    <td style={{ padding: "10px 12px", textAlign: "right" }}>₹{data.amount.toLocaleString()}</td>
                   </tr>
                   {data.discount > 0 && (
                     <tr style={{ borderTop: "1px solid #e5e7eb" }}>
                       <td style={{ padding: "10px 12px", color: "#22c55e" }}>Discount</td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", color: "#22c55e" }}>-${data.discount.toLocaleString()}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: "#22c55e" }}>-₹{data.discount.toLocaleString()}</td>
                     </tr>
                   )}
                   {data.fine > 0 && (
                     <tr style={{ borderTop: "1px solid #e5e7eb" }}>
                       <td style={{ padding: "10px 12px", color: "#ef4444" }}>Late Fine</td>
-                      <td style={{ padding: "10px 12px", textAlign: "right", color: "#ef4444" }}>+${data.fine.toLocaleString()}</td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", color: "#ef4444" }}>+₹{data.fine.toLocaleString()}</td>
                     </tr>
                   )}
                   <tr style={{ borderTop: "2px solid #e5e7eb", background: "#f9fafb" }}>
                     <td style={{ padding: "10px 12px", fontWeight: "700" }}>Total</td>
-                    <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700" }}>${data.totalAmount.toLocaleString()}</td>
+                    <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: "700" }}>₹{data.totalAmount.toLocaleString()}</td>
                   </tr>
                 </tbody>
               </table>
@@ -120,7 +120,7 @@ export function FeeReceiptTemplate({ data }: { data: ReceiptData }) {
             <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "12px 16px", marginBottom: "16px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
                 <span style={{ fontWeight: "600", color: "#166534" }}>Amount Paid</span>
-                <span style={{ fontWeight: "700", color: "#166534", fontSize: "16px" }}>${data.paidAmount.toLocaleString()}</span>
+                <span style={{ fontWeight: "700", color: "#166534", fontSize: "16px" }}>₹{data.paidAmount.toLocaleString()}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px", fontSize: "12px", color: "#6b7280" }}>
                 <span>Method: {data.paymentMethod}</span>
@@ -132,7 +132,7 @@ export function FeeReceiptTemplate({ data }: { data: ReceiptData }) {
               <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", padding: "10px 16px", fontSize: "13px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <span style={{ color: "#991b1b", fontWeight: "600" }}>Remaining Balance</span>
-                  <span style={{ color: "#991b1b", fontWeight: "700" }}>${data.remainingBalance.toLocaleString()}</span>
+                  <span style={{ color: "#991b1b", fontWeight: "700" }}>₹{data.remainingBalance.toLocaleString()}</span>
                 </div>
               </div>
             )}

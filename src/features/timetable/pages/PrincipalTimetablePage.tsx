@@ -11,6 +11,7 @@ import {
   type SectionWithClassTeacher,
   type TimetableSlot,
 } from "../api/timetable.api"
+import { getOrCreateTimetableBatch, getTimetableBatches } from "../api/timetableApproval.api"
 import { TimetableGrid } from "../components/TimetableGrid"
 import { TimetableSlotEditor } from "../components/TimetableSlotEditor"
 import { ClassTeacherAssigner } from "../components/ClassTeacherAssigner"
@@ -20,7 +21,7 @@ import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
 export function PrincipalTimetablePage() {
-  const { activeSchoolId } = useAuth()
+  const { activeSchoolId, activeRole } = useAuth()
   const [selectedSectionId, setSelectedSectionId] = useState<string>("")
   const [editorOpen, setEditorOpen] = useState(false)
   const [editorDay, setEditorDay] = useState(0)
@@ -55,6 +56,14 @@ export function PrincipalTimetablePage() {
     enabled: !!activeSchoolId,
   })
 
+  const { data: allBatches = [] } = useQuery({
+    queryKey: ["timetable-batches", activeSchoolId],
+    queryFn: () => getTimetableBatches(activeSchoolId!),
+    enabled: !!activeSchoolId,
+  })
+
+  const batchBySection = new Map(allBatches.map((b) => [b.section_id, b.status]))
+
   // Group sections by class
   const classSectionMap = new Map<string, { className: string; sections: SectionWithClassTeacher[] }>()
   for (const sec of sectionsData) {
@@ -68,6 +77,29 @@ export function PrincipalTimetablePage() {
 
   const selectedSection = sectionsData.find((s) => s.section_id === selectedSectionId)
 
+  const { data: batch } = useQuery({
+    queryKey: ["timetable-batch", selectedSectionId, selectedSection?.academic_year_id, activeSchoolId],
+    queryFn: () =>
+      getOrCreateTimetableBatch({
+        schoolId: activeSchoolId!,
+        sectionId: selectedSectionId,
+        academicYearId: selectedSection!.academic_year_id,
+      }),
+    enabled: !!selectedSectionId && !!selectedSection?.academic_year_id && !!activeSchoolId,
+  })
+
+  const batchStatus = batch?.status ?? slots[0]?.batch_status ?? "draft"
+
+  const canManageTimetable =
+    activeRole === "principal" || activeRole === "vice_principal" || activeRole === "school_admin"
+
+  function statusHint(status: string) {
+    if (status === "pending_approval") return "Pending approval"
+    if (status === "published") return "Published"
+    if (status === "draft") return "Draft"
+    return null
+  }
+
   function handleCellClick(day: number, period: number, existing?: TimetableSlot) {
     setEditorDay(day)
     setEditorPeriod(period)
@@ -77,7 +109,7 @@ export function PrincipalTimetablePage() {
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
-      <TimetableApprovalPanel />
+      <TimetableApprovalPanel onEditSection={setSelectedSectionId} />
       {/* Page header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
@@ -128,7 +160,10 @@ export function PrincipalTimetablePage() {
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-1.5">
-                    {sections.map((sec) => (
+                    {sections.map((sec) => {
+                      const secStatus = batchBySection.get(sec.section_id)
+                      const statusLabel = secStatus ? statusHint(secStatus) : null
+                      return (
                       <button
                         key={sec.section_id}
                         className={cn(
@@ -146,8 +181,22 @@ export function PrincipalTimetablePage() {
                         )}>
                           {sec.class_teacher_name ?? "No Teacher"}
                         </span>
+                        {statusLabel && (
+                          <span
+                            className={cn(
+                              "text-[9px] font-semibold uppercase tracking-wide mt-0.5",
+                              selectedSectionId === sec.section_id
+                                ? "text-primary-foreground/70"
+                                : secStatus === "pending_approval"
+                                  ? "text-amber-600 dark:text-amber-400"
+                                  : "text-muted-foreground/80",
+                            )}
+                          >
+                            {statusLabel}
+                          </span>
+                        )}
                       </button>
-                    ))}
+                    )})}
                   </div>
                 </div>
               ))
@@ -168,7 +217,9 @@ export function PrincipalTimetablePage() {
               </li>
               <li className="flex gap-2">
                 <span className="text-primary font-bold">3.</span>
-                Changes are saved instantly to the system.
+                {canManageTimetable
+                  ? "Draft and pending timetables stay editable until the principal publishes."
+                  : "Changes save as draft — not visible to teachers or students until the principal publishes."}
               </li>
             </ul>
           </div>
@@ -204,10 +255,27 @@ export function PrincipalTimetablePage() {
                             Current Year
                           </Badge>
                         )}
+                        <Badge
+                          variant={batchStatus === "published" ? "default" : "secondary"}
+                          className="h-5 text-[10px] font-medium capitalize"
+                        >
+                          {batchStatus.replace(/_/g, " ")}
+                        </Badge>
                       </div>
                       <h2 className="text-2xl font-bold tracking-tight">
                         Section {selectedSection?.section_name} Timetable
                       </h2>
+                      {batchStatus === "pending_approval" && (
+                        <p className="text-sm text-amber-700 dark:text-amber-400">
+                          Awaiting principal approval — click any cell to edit. Other sections can be submitted
+                          separately; publish each one when ready.
+                        </p>
+                      )}
+                      {batchStatus === "draft" && (
+                        <p className="text-sm text-amber-700 dark:text-amber-400">
+                          Saved as draft — not visible to teachers or students until submitted and published.
+                        </p>
+                      )}
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <span className="font-medium text-foreground">{slots.length}</span>
                         <span>periods scheduled this week</span>
@@ -262,12 +330,14 @@ export function PrincipalTimetablePage() {
       </div>
 
       {/* Slot editor dialog */}
-      {editorOpen && selectedSectionId && activeSchoolId && (
+      {editorOpen && selectedSectionId && activeSchoolId && batch?.id && (
         <TimetableSlotEditor
           open={editorOpen}
           onClose={() => setEditorOpen(false)}
           sectionId={selectedSectionId}
           schoolId={activeSchoolId}
+          batchId={batch.id}
+          batchStatus={batchStatus}
           day={editorDay}
           period={editorPeriod}
           existing={editorSlot}

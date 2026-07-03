@@ -102,7 +102,19 @@ export function TeacherTimetablePage() {
           </div>
         </CardHeader>
         <CardContent>
-          <TimetableGrid slots={slots} loading={isLoading} />
+          {!isLoading && slots.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center gap-3">
+              <CalendarDays className="h-10 w-10 text-muted-foreground/30" />
+              <div>
+                <p className="font-semibold text-muted-foreground">No published timetable yet</p>
+                <p className="text-sm text-muted-foreground/70 mt-1 max-w-sm">
+                  Your schedule will appear here after the principal approves and publishes it.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <TimetableGrid slots={slots} loading={isLoading} />
+          )}
         </CardContent>
       </Card>
 

@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/features/auth/hooks/useAuth"
 import { getHomeroomSections } from "@/features/dashboard/api/dashboard.api"
-import { getTimetableForSection } from "@/features/timetable/api/timetable.api"
+import { getPublishedTimetableForSection } from "@/features/timetable/api/timetable.api"
 import { TimetableGrid } from "@/features/timetable/components/TimetableGrid"
 
 export function ClassTeacherTimetableTab() {
@@ -23,7 +23,7 @@ export function ClassTeacherTimetableTab() {
 
   const { data: slots = [], isLoading: slotsLoading } = useQuery({
     queryKey: ["class-teacher-timetable", effectiveSectionId],
-    queryFn: () => getTimetableForSection(effectiveSectionId!),
+    queryFn: () => getPublishedTimetableForSection(effectiveSectionId!),
     enabled: !!effectiveSectionId,
   })
 
@@ -73,6 +73,11 @@ export function ClassTeacherTimetableTab() {
           </p>
         )}
         <TimetableGrid slots={slots} loading={slotsLoading} />
+        {!slotsLoading && slots.length === 0 && (
+          <p className="text-sm text-muted-foreground mt-4 text-center">
+            No published timetable yet — awaiting principal approval.
+          </p>
+        )}
       </CardContent>
     </Card>
   )

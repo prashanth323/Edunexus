@@ -1,7 +1,13 @@
 export const FEE_CATEGORIES = [
   { value: "tuition", label: "Tuition" },
   { value: "hostel", label: "Hostel" },
+  { value: "admission", label: "Admission" },
+  { value: "transport", label: "Transport" },
   { value: "books", label: "Books" },
+  { value: "uniform", label: "Uniform" },
+  { value: "sports", label: "Sports" },
+  { value: "library", label: "Library" },
+  { value: "lab", label: "Lab" },
   { value: "miscellaneous", label: "Miscellaneous" },
   { value: "other", label: "Other" },
 ] as const

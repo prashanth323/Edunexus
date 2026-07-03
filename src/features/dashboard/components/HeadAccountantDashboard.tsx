@@ -60,7 +60,10 @@ export function HeadAccountantDashboard() {
           <CardContent>
             <div className="text-2xl font-bold">{approved}</div>
             <Button variant="link" className="h-auto p-0 text-xs" asChild>
-              <Link to="/finance/fee-plans?tab=approved">View approved</Link>
+              <Link to="/finance/fee-plans?tab=approved">View approved plans</Link>
+            </Button>
+            <Button variant="link" className="h-auto p-0 text-xs block" asChild>
+              <Link to="/finance/fee-structures">Active fee structures →</Link>
             </Button>
           </CardContent>
         </Card>
@@ -70,7 +73,9 @@ export function HeadAccountantDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{superseded}</div>
-            <p className="text-xs text-muted-foreground">Replaced by newer plans</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Older VP-approved plans replaced when a newer plan was approved for the same class and year. Their fee structures are retired.
+            </p>
           </CardContent>
         </Card>
       </div>

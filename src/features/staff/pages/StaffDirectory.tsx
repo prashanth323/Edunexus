@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Search, Plus, Mail, Phone, Building, Briefcase, Loader2, MoreVertical, X, FileUp } from "lucide-react"
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
@@ -11,13 +11,21 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Label } from "@/components/ui/label"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/features/auth/hooks/useAuth"
-import { getStaffMembers, teachingRoleBadges, type StaffMember } from "../api/staff.api"
+import { deactivateStaffMember, getStaffMembers, teachingRoleBadges, type StaffMember } from "../api/staff.api"
 import { StaffMemberDetailModal } from "../components/StaffMemberDetailModal"
 import { inviteSchoolUsers } from "@/features/invites/api/invites.api"
 import { PRINCIPAL_INVITE_STAFF_ROLES, formatSchoolRoleLabel } from "@/config/school-roles"
@@ -40,6 +48,7 @@ export function StaffDirectory() {
   const [singleRole, setSingleRole] = useState<string>(PRINCIPAL_INVITE_STAFF_ROLES[0] ?? "teacher")
   const [bulkImportOpen, setBulkImportOpen] = useState(false)
   const [detailMember, setDetailMember] = useState<StaffMember | null>(null)
+  const [deactivateTarget, setDeactivateTarget] = useState<StaffMember | null>(null)
 
   const canEditStaff =
     activeRole === "vice_principal" ||
@@ -52,6 +61,21 @@ export function StaffDirectory() {
     queryFn: () => getStaffMembers(activeSchoolId!),
     enabled: !!activeSchoolId,
   })
+
+  const deactivateMut = useMutation({
+    mutationFn: deactivateStaffMember,
+    onSuccess: () => {
+      toast.success("Staff member deactivated")
+      setDeactivateTarget(null)
+      setDetailMember(null)
+      queryClient.invalidateQueries({ queryKey: ["staff-directory", activeSchoolId] })
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  function canDeactivateMember(member: StaffMember): boolean {
+    return canEditStaff && member.role !== "principal" && member.is_active !== false
+  }
 
   const filteredStaff = staff.filter(
     (s) =>
@@ -163,6 +187,38 @@ export function StaffDirectory() {
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
       {detailMember && <StaffMemberDetailModal member={detailMember} onClose={() => setDetailMember(null)} />}
+
+      <Dialog open={!!deactivateTarget} onOpenChange={(open) => !open && setDeactivateTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Deactivate staff member?</DialogTitle>
+            <DialogDescription>
+              {deactivateTarget
+                ? `Deactivate ${deactivateTarget.first_name} ${deactivateTarget.last_name}? They will lose access to the school portal.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeactivateTarget(null)}
+              disabled={deactivateMut.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deactivateMut.isPending || !deactivateTarget}
+              onClick={() => {
+                if (deactivateTarget) deactivateMut.mutate(deactivateTarget.id)
+              }}
+            >
+              {deactivateMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+              Deactivate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {inviteOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
@@ -287,7 +343,9 @@ export function StaffDirectory() {
                 setDetailMember(member)
               }
             }}
-            className="overflow-hidden hover:border-primary/50 transition-colors group cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={`overflow-hidden hover:border-primary/50 transition-colors group cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              member.is_active === false ? "opacity-60" : ""
+            }`}
           >
             <CardHeader className="p-0">
               <div className="h-16 bg-muted/50 w-full relative">
@@ -312,7 +370,13 @@ export function StaffDirectory() {
                     >
                       Edit details
                     </DropdownMenuItem>
-                    <DropdownMenuItem disabled>Deactivate</DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={!canDeactivateMember(member)}
+                      className="text-destructive focus:text-destructive"
+                      onSelect={() => setDeactivateTarget(member)}
+                    >
+                      Deactivate
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -348,13 +412,18 @@ export function StaffDirectory() {
                     )}
                   </div>
                 )}
-                <div className="mt-2">
+                <div className="mt-2 flex flex-wrap justify-center gap-1">
                   <Badge
                     variant="secondary"
                     className={`capitalize text-xs font-normal border-transparent ${getStatusColor(member.status)} `}
                   >
                     {member.status.replace("_", " ")}
                   </Badge>
+                  {member.is_active === false && (
+                    <Badge variant="outline" className="text-xs text-muted-foreground">
+                      Inactive
+                    </Badge>
+                  )}
                 </div>
               </div>
             </CardHeader>
