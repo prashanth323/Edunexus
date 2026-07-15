@@ -27,6 +27,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { cn } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -161,6 +162,7 @@ export function StudentProfile({ portalMode = false, studentIdOverride }: Studen
   const showPortalCredentials = !portalMode && canViewPortalCredentials(activeRole)
   const canManageHostel = HOSTEL_ACCESS.has(activeRole ?? "")
   const canManageTransport = TRANSPORT_ACCESS.has(activeRole ?? "")
+  const showIdCard = activeRole !== "receptionist"
 
   function hostelStatusLabel() {
     if (!serviceDetails || serviceDetails.transport_mode !== "hostel") return "—"
@@ -562,12 +564,14 @@ export function StudentProfile({ portalMode = false, studentIdOverride }: Studen
 
       {/* Tabs */}
       <Tabs defaultValue="personal" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5 max-w-xl">
+        <TabsList className={cn("grid w-full max-w-xl", showIdCard ? "grid-cols-5" : "grid-cols-4")}>
           <TabsTrigger value="personal"><User className="h-3.5 w-3.5 mr-1.5" />Personal</TabsTrigger>
           <TabsTrigger value="documents"><FileText className="h-3.5 w-3.5 mr-1.5" />Docs</TabsTrigger>
           <TabsTrigger value="parents"><Users className="h-3.5 w-3.5 mr-1.5" />Parents</TabsTrigger>
           <TabsTrigger value="fees"><CreditCard className="h-3.5 w-3.5 mr-1.5" />Fees</TabsTrigger>
-          <TabsTrigger value="idcard"><IdCard className="h-3.5 w-3.5 mr-1.5" />ID Card</TabsTrigger>
+          {showIdCard && (
+            <TabsTrigger value="idcard"><IdCard className="h-3.5 w-3.5 mr-1.5" />ID Card</TabsTrigger>
+          )}
         </TabsList>
 
         {/* Personal Tab */}
@@ -839,17 +843,19 @@ export function StudentProfile({ portalMode = false, studentIdOverride }: Studen
         </TabsContent>
 
         {/* ID Card Tab */}
-        <TabsContent value="idcard">
-          <Card>
-            <CardHeader>
-              <CardTitle>Student ID Card</CardTitle>
-              <CardDescription>Generate and print a student identity card.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <IdCardGenerator data={buildStudentIdCardData(student, schoolDisplayName ?? "School")} />
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {showIdCard && (
+          <TabsContent value="idcard">
+            <Card>
+              <CardHeader>
+                <CardTitle>Student ID Card</CardTitle>
+                <CardDescription>Generate and print a student identity card.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <IdCardGenerator data={buildStudentIdCardData(student, schoolDisplayName ?? "School")} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   )
