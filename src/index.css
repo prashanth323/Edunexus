@@ -1,4 +1,4 @@
-@tailwind base;
+﻿@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
@@ -65,7 +65,7 @@
     --ring: 39 89% 69%;
   }
 
-  /* Student workspace: matte neutrals � very low chroma so surfaces read flat/paper, not tinted */
+  /* Student workspace: matte neutrals — very low chroma so surfaces read flat/paper, not tinted */
   .student-surface {
     --background: 208 37% 94%;
     --foreground: 222 47% 11%;

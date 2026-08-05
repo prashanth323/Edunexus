@@ -6,13 +6,13 @@ import { cn } from "@/lib/utils"
 export type DashboardStatCardProps = {
   title: string
   /** Numeric value; combined with `displayValue` when both set, `displayValue` wins for the main figure. */
-  value?: number
+  value?: number | string
   /** Override display (e.g. formatted currency). */
   displayValue?: string
   description?: string
   icon: ComponentType<{ className?: string }>
   onClick?: () => void
-  color?: "default" | "amber" | "navy" | "blue" | "emerald" | "purple" | "rose" | "indigo" | "orange" | "yellow" | "cyan" | "fuchsia"
+  color?: "default" | "amber" | "navy" | "blue" | "emerald" | "purple" | "rose" | "indigo" | "orange" | "yellow" | "cyan" | "fuchsia" | "violet"
 }
 
 const colorMap = {
@@ -97,6 +97,12 @@ const colorMap = {
     iconText: "text-fuchsia-700 dark:text-fuchsia-300",
     bgIcon: "text-fuchsia-600",
   },
+  violet: {
+    cardBg: "bg-violet-100/80 dark:bg-violet-900/20 border-violet-300 dark:border-violet-800",
+    iconBg: "bg-violet-200 dark:bg-violet-900/60",
+    iconText: "text-violet-700 dark:text-violet-300",
+    bgIcon: "text-violet-600",
+  },
 }
 
 export function DashboardStatCard({
@@ -110,9 +116,9 @@ export function DashboardStatCard({
 }: DashboardStatCardProps) {
   const main =
     displayValue ??
-    (value !== undefined ? value.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—")
+    (value !== undefined ? (typeof value === "number" ? value.toLocaleString(undefined, { maximumFractionDigits: 0 }) : value) : "—")
 
-  const theme = colorMap[color] || colorMap.default
+  const theme = (colorMap[color] as any) || colorMap.default
 
   return (
     <Card 

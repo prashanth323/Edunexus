@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react"
 import { Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
-import { Moon, Sun, GraduationCap, LogOut, User as UserIcon, Building2, Menu } from "lucide-react"
+import { Moon, Sun, LogOut, User as UserIcon, Building2, Menu } from "lucide-react"
 import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 

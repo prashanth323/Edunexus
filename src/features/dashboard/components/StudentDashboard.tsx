@@ -3,7 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import { BookOpen, CalendarCheck, CalendarDays, ClipboardList, CreditCard, GraduationCap, IdCard, Megaphone, TrendingUp, User } from "lucide-react"
 import { Link } from "react-router-dom"
 
-import { Card, CardContent, CardDescription, CardFooter, CardGrid, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardDescription, CardFooter, CardGrid, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatCardSkeletonGrid } from "@/components/ui/card-skeleton"
 import { Button } from "@/components/ui/button"
 import { DashboardStatCard } from "@/components/dashboard/StatCard"
