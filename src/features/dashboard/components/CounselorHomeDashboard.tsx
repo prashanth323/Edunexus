@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 import { Target, Users } from "lucide-react"
 import { Link } from "react-router-dom"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { DashboardStatCard } from "@/components/dashboard/StatCard"
 import { StatCardSkeletonGrid } from "@/components/ui/card-skeleton"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/features/auth/hooks/useAuth"
@@ -66,46 +66,34 @@ export function CounselorHomeDashboard() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active leads</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{count(OPEN)}</div>
-            <p className="text-xs text-muted-foreground mt-1">New through follow-up</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Visits</CardTitle>
-            <Target className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{count(VISIT)}</div>
-            <p className="text-xs text-muted-foreground mt-1">Scheduled or completed</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Applications</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{count(PIPELINE)}</div>
-            <p className="text-xs text-muted-foreground mt-1">Applied stage</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Call queue</CardTitle>
-            <Target className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{pendingCallbacks}</div>
-            <p className="text-xs text-muted-foreground mt-1">Scheduled callbacks</p>
-          </CardContent>
-        </Card>
+        <DashboardStatCard
+          title="Active leads"
+          value={count(OPEN)}
+          description="New through follow-up"
+          icon={Users}
+          color="violet"
+        />
+        <DashboardStatCard
+          title="Visits"
+          value={count(VISIT)}
+          description="Scheduled or completed"
+          icon={Target}
+          color="violet"
+        />
+        <DashboardStatCard
+          title="Applications"
+          value={count(PIPELINE)}
+          description="Applied stage"
+          icon={Users}
+          color="violet"
+        />
+        <DashboardStatCard
+          title="Call queue"
+          value={pendingCallbacks}
+          description="Scheduled callbacks"
+          icon={Target}
+          color="purple"
+        />
       </div>
 
       {activeSchoolId && <CallLogPanel schoolId={activeSchoolId} />}

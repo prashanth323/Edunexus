@@ -243,25 +243,28 @@ export function HostelOverview() {
 
         <TabsContent value="overview" className="mt-4 space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <DashboardStatCard title="Rooms" value={h.roomsTotal} description="All configured" icon={Home} />
+        <DashboardStatCard title="Rooms" value={h.roomsTotal} description="All configured" icon={Home} color="violet" />
         <DashboardStatCard
           title="Active rooms"
           value={h.roomsActive}
           description={`${roomsInactive} inactive`}
           icon={BedDouble}
+          color="violet"
         />
-        <DashboardStatCard title="Bed capacity" value={h.bedCapacityTotal} description="Active rooms only" icon={Users} />
+        <DashboardStatCard title="Bed capacity" value={h.bedCapacityTotal} description="Active rooms only" icon={Users} color="violet" />
         <DashboardStatCard
           title="Current residents"
           value={h.allocationsCount}
           description="Allocations on file"
           icon={Users}
+          color="violet"
         />
         <DashboardStatCard
           title="Occupancy"
           displayValue={`${h.occupancyPct}%`}
           description="Residents vs capacity"
           icon={Percent}
+          color="violet"
         />
       </div>
 

@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 import { Link } from "react-router-dom"
 
+import { DashboardStatCard } from "@/components/dashboard/StatCard"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardGrid, CardHeader, CardTitle } from "@/components/ui/card"
 import { GenericCardSkeleton, StatCardSkeletonGrid } from "@/components/ui/card-skeleton"
@@ -137,7 +138,10 @@ export function TeacherDashboard() {
     return (
       <div className="flex flex-col gap-6 animate-in fade-in duration-500">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Teacher Dashboard</h1>
+          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3 bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-emerald-500">
+            <BookOpen className="h-8 w-8 text-blue-600" />
+            Teacher Dashboard
+          </h1>
           <p className="text-muted-foreground mt-1">Manage your classes, students, and assignments.</p>
         </div>
         <StatCardSkeletonGrid count={4} />
@@ -159,72 +163,47 @@ export function TeacherDashboard() {
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Teacher Dashboard</h1>
-        <p className="text-muted-foreground mt-1">
-          {roleLabel
-            ? `${roleLabel} — manage teaching, homeroom, and assignments.`
-            : "Manage your classes, students, and assignments."}
-        </p>
-        {isClassTeacher && homeroomSections.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 mt-3">
-            <GraduationCap className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Homeroom:</span>
-            {homeroomSections.map((sec) => (
-              <Badge key={sec.section_id} variant="secondary">
-                {sec.class_name} – {sec.section_name}
-              </Badge>
-            ))}
-          </div>
-        )}
+      <div className="relative overflow-hidden rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-card">
+        <img src="/dashboard_premium_banner.png" alt="Premium Banner" className="absolute inset-0 w-full h-full object-cover opacity-15 pointer-events-none mix-blend-multiply dark:mix-blend-screen" />
+        <div className="absolute inset-0 bg-gradient-to-r from-white/95 via-white/80 to-transparent dark:from-background/95 dark:via-background/80 z-0 pointer-events-none" />
+        
+        <div className="relative space-y-3 z-10">
+          <h1 className="text-3xl font-extrabold tracking-tight flex items-center gap-3 text-indigo-700 dark:text-indigo-400">
+            <BookOpen className="h-9 w-9" />
+            Teacher Dashboard
+          </h1>
+          <p className="text-indigo-900/70 dark:text-indigo-200/70 text-sm sm:text-base max-w-2xl">
+            {roleLabel
+              ? `${roleLabel} — manage teaching, homeroom, and assignments.`
+              : "Manage your classes, students, and assignments."}
+          </p>
+          {isClassTeacher && homeroomSections.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <GraduationCap className="h-4 w-4 text-indigo-600/60 dark:text-indigo-400/60" />
+              <span className="text-sm text-indigo-900/60 dark:text-indigo-200/60">Homeroom:</span>
+              {homeroomSections.map((sec) => (
+                <Badge key={sec.section_id} variant="secondary" className="shadow-sm bg-white dark:bg-indigo-950">
+                  {sec.class_name} – {sec.section_name}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <CardGrid className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card variants={staggerI}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">My classes</CardTitle>
-            <BookOpen className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalClasses}</div>
-            <p className="text-xs text-muted-foreground mt-1">Distinct sections in timetable</p>
-          </CardContent>
-        </Card>
-
-        <Card variants={staggerI}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Students in sections</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalStudents}</div>
-            <p className="text-xs text-muted-foreground mt-1">Sum of enrollments (may overlap)</p>
-          </CardContent>
-        </Card>
-
-        <Card variants={staggerI}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Timetable slots</CardTitle>
-            <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{rows.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">Active entries this term</p>
-          </CardContent>
-        </Card>
-
-        <Card variants={staggerI}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Today</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {rows.filter((r: { attendance_marked_today?: boolean }) => r.attendance_marked_today).length}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Sections with attendance marked</p>
-          </CardContent>
-        </Card>
+        <motion.div variants={staggerI}>
+          <DashboardStatCard title="My classes" value={totalClasses} description="Distinct sections in timetable" icon={BookOpen} color="violet" />
+        </motion.div>
+        <motion.div variants={staggerI}>
+          <DashboardStatCard title="Students in sections" value={totalStudents} description="Sum of enrollments (may overlap)" icon={Users} color="violet" />
+        </motion.div>
+        <motion.div variants={staggerI}>
+          <DashboardStatCard title="Timetable slots" value={rows.length} description="Active entries this term" icon={ClipboardCheck} color="violet" />
+        </motion.div>
+        <motion.div variants={staggerI}>
+          <DashboardStatCard title="Today" value={rows.filter((r: { attendance_marked_today?: boolean }) => r.attendance_marked_today).length} description="Sections with attendance marked" icon={Calendar} color="purple" />
+        </motion.div>
       </CardGrid>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7 mt-4">
@@ -280,7 +259,7 @@ export function TeacherDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-3 overflow-hidden border-muted/80 bg-gradient-to-b from-card to-muted/20" variants={staggerI}>
+        <Card className="lg:col-span-3 overflow-hidden border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/10" variants={staggerI}>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">Quick actions</CardTitle>
             <CardDescription>Tasks based on your teaching roles.</CardDescription>

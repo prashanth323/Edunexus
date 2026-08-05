@@ -34,6 +34,7 @@ import {
   type PrincipalAttendanceStats,
 } from "../api/attendance.api"
 import { VpClassAttendancePanel } from "../components/VpClassAttendancePanel"
+import { DashboardStatCard } from "@/components/dashboard/StatCard"
 
 const AREA_STROKE = "hsl(var(--primary) / 0.9)"
 const BAR_FILL = "hsl(var(--primary) / 0.85)"
@@ -63,25 +64,22 @@ function StatCard({
   value,
   description,
   icon: Icon,
+  color = "amber"
 }: {
   title: string
   value: string | number
   description?: string
   icon: ComponentType<{ className?: string }>
+  color?: string
 }) {
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold tabular-nums">
-          {typeof value === "number" ? value.toLocaleString() : value}
-        </div>
-        {description ? <p className="text-xs text-muted-foreground mt-1">{description}</p> : null}
-      </CardContent>
-    </Card>
+    <DashboardStatCard
+      title={title}
+      value={typeof value === "number" ? value.toLocaleString() : value}
+      description={description}
+      icon={Icon as any}
+      color={color as any}
+    />
   )
 }
 
@@ -209,6 +207,7 @@ export function AttendancePrincipalOverview() {
           value={o.period_days}
           description="Days in status charts below"
           icon={PieChartIcon}
+          color="purple"
         />
       </div>
 

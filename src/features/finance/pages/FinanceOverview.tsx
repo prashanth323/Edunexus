@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
-  DollarSign,
+  IndianRupee,
   CreditCard,
   Search,
   Loader2,
@@ -60,7 +60,7 @@ const PIE_COLORS = ["hsl(var(--primary))", "hsl(var(--muted-foreground) / 0.45)"
 const BAR_FILL = "hsl(var(--primary) / 0.85)"
 
 function fmtMoney(n: number) {
-  return n.toLocaleString(undefined, { maximumFractionDigits: 0 })
+  return `₹${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
 }
 
 function FinanceOverviewMetricsSection({
@@ -94,42 +94,49 @@ function FinanceOverviewMetricsSection({
           displayValue={fmtMoney(m.pendingFeesAmount)}
           description="Sum of due on open invoices"
           icon={Wallet}
+          color="violet"
         />
         <DashboardStatCard
           title="Collections (this month)"
           displayValue={fmtMoney(m.collectionsThisMonth)}
           description="Recorded in school dashboard view"
           icon={Landmark}
+          color="violet"
         />
         <DashboardStatCard
           title="Payment records"
           value={m.paymentsTotalCount}
           description="All non-refunded payments"
           icon={CreditCard}
+          color="violet"
         />
         <DashboardStatCard
           title="Recent list preview"
           value={transactionsLen}
           description="Latest rows shown beside chart"
           icon={Receipt}
+          color="violet"
         />
         <DashboardStatCard
           title="Open invoices"
           value={m.openInvoicesCount}
           description="Invoices with due &gt; 0"
           icon={FileStack}
+          color="violet"
         />
-        <DashboardStatCard title="Total invoices" value={m.totalInvoicesCount} icon={Receipt} />
+        <DashboardStatCard title="Total invoices" value={m.totalInvoicesCount} icon={Receipt} color="violet" />
         <DashboardStatCard
           title="Overdue"
           value={m.overdueInvoicesCount}
           description="Status overdue, balance outstanding"
           icon={AlertTriangle}
+          color="violet"
         />
         <DashboardStatCard
           title="Partially paid"
           value={m.invoiceStatusPartial}
-          icon={DollarSign}
+          icon={IndianRupee}
+          color="violet"
         />
       </div>
 
@@ -336,7 +343,7 @@ export function FinanceOverview({ embedded = false }: FinanceOverviewProps) {
         </Button>
         <Button asChild variant="outline" size="sm" className="gap-2">
           <Link to="/finance/fee-structures">
-            <DollarSign className="h-4 w-4" /> Fee Structures
+            <IndianRupee className="h-4 w-4" /> Fee Structures
           </Link>
         </Button>
         {activeRole === "accountant" ? (
@@ -481,7 +488,7 @@ export function FinanceOverview({ embedded = false }: FinanceOverviewProps) {
                         </div>
                         <div className="flex flex-col items-end shrink-0 ml-2">
                           <span className="font-bold text-green-600 dark:text-green-500">
-                            +{Number(tx.amount).toLocaleString()}
+                            +₹{Number(tx.amount).toLocaleString()}
                           </span>
                           <Badge variant="outline" className="text-[10px] mt-1 h-5 capitalize">
                             {String(tx.payment_method).replace(/_/g, " ")}

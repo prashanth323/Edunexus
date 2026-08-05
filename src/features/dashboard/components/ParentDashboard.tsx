@@ -279,13 +279,17 @@ export function ParentDashboard() {
       )}
 
       {/* Hero Welcome Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/10 p-6 sm:p-8">
-        <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-primary/10 blur-3xl" />
-        <div className="absolute -left-10 -bottom-10 h-44 w-44 rounded-full bg-purple-500/10 blur-3xl" />
-        <div className="relative space-y-4">
+      <div className="relative overflow-hidden rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-card">
+        <img src="/dashboard_premium_banner.png" alt="Premium Banner" className="absolute inset-0 w-full h-full object-cover opacity-15 pointer-events-none mix-blend-multiply dark:mix-blend-screen" />
+        <div className="absolute inset-0 bg-gradient-to-r from-white/95 via-white/80 to-transparent dark:from-background/95 dark:via-background/80 z-0 pointer-events-none" />
+        
+        <div className="relative space-y-4 z-10">
           <div className="space-y-2">
-            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">Parent Portal</h1>
-            <p className="text-muted-foreground text-sm sm:text-base max-w-xl">
+            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight flex items-center gap-3 text-purple-700 dark:text-purple-400">
+              <User className="h-9 w-9" />
+              Parent Portal
+            </h1>
+            <p className="text-purple-900/70 dark:text-purple-200/70 text-sm sm:text-base max-w-xl">
               Welcome back! Real-time academic tracking, performance insights, and administrative updates for your linked children.
             </p>
           </div>
@@ -337,9 +341,9 @@ export function ParentDashboard() {
 
       {/* Visual Analytics Hub Cards */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <Card className="relative overflow-hidden border-primary/20 bg-gradient-to-br from-card to-primary/5 shadow-sm">
+        <Card className="relative overflow-hidden border-transparent bg-[#a855f7] text-white shadow-soft hover:shadow-premium hover:-translate-y-1 transition-all duration-300">
           <CardHeader className="pb-2">
-            <CardDescription className="uppercase tracking-wider font-semibold text-[10px] text-primary">Connected Family</CardDescription>
+            <CardDescription className="uppercase tracking-wider font-semibold text-[10px] text-slate-800">Connected Family</CardDescription>
             <CardTitle className="text-3xl font-extrabold">{activeChildrenCount}</CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
@@ -348,9 +352,9 @@ export function ParentDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="relative overflow-hidden border-primary/20 bg-gradient-to-br from-card to-purple-500/5 shadow-sm">
+        <Card className="relative overflow-hidden border-transparent bg-[#a855f7] text-white shadow-soft hover:shadow-premium hover:-translate-y-1 transition-all duration-300">
           <CardHeader className="pb-2">
-            <CardDescription className="uppercase tracking-wider font-semibold text-[10px] text-purple-500">Average Attendance</CardDescription>
+            <CardDescription className="uppercase tracking-wider font-semibold text-[10px] text-slate-800">Average Attendance</CardDescription>
             <CardTitle className="text-3xl font-extrabold">{avgAttendance > 0 ? `${avgAttendance.toFixed(1)}%` : "—"}</CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
@@ -359,11 +363,11 @@ export function ParentDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="relative overflow-hidden border-primary/20 bg-gradient-to-br from-card to-rose-500/5 shadow-sm">
+        <Card className="relative overflow-hidden border-transparent bg-[#310b65] text-white shadow-soft hover:shadow-premium hover:-translate-y-1 transition-all duration-300">
           <CardHeader className="pb-2">
-            <CardDescription className="uppercase tracking-wider font-semibold text-[10px] text-rose-500">Pending Financials</CardDescription>
-            <CardTitle className={`text-3xl font-extrabold ${totalPendingFees > 0 ? "text-rose-500" : "text-emerald-500"}`}>
-              ${totalPendingFees.toLocaleString()}
+            <CardDescription className="uppercase tracking-wider font-semibold text-[10px] text-blue-200">Pending Financials</CardDescription>
+            <CardTitle className={`text-3xl font-extrabold ${totalPendingFees > 0 ? "text-white" : "text-emerald-400"}`}>
+              ₹{totalPendingFees.toLocaleString()}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
@@ -391,8 +395,8 @@ export function ParentDashboard() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {rows.map((child) => (
-              <Card key={child.student_id} className="relative overflow-hidden border hover:border-primary/40 transition-all hover:shadow-md rounded-2xl">
-                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-primary to-purple-600" />
+              <Card key={child.student_id} className="relative overflow-hidden border hover:border-primary/40 transition-all hover:-translate-y-1 hover:shadow-premium shadow-soft rounded-2xl">
+                <div className="absolute top-0 left-0 right-0 h-1.5 bg-blue-500" />
                 <CardHeader className="pb-4 flex flex-row items-center gap-4 pt-6">
                   <Avatar className="h-14 w-14 border-2 border-background shadow-md shrink-0">
                     <LinkedChildAvatar photoUrl={child.photo_url} studentName={child.student_name} />
@@ -430,7 +434,7 @@ export function ParentDashboard() {
                     <div className="flex flex-col gap-1 p-3 border rounded-xl bg-muted/30">
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Pending Fees</span>
                       <span className="text-base font-extrabold mt-0.5 text-rose-500">
-                        ${Number(child.pending_fees ?? 0).toLocaleString()}
+                        ₹{Number(child.pending_fees ?? 0).toLocaleString()}
                       </span>
                     </div>
                   </div>
@@ -616,11 +620,11 @@ export function ParentDashboard() {
                 <div className="flex justify-center gap-6 text-xs mt-2 shrink-0 border-t pt-4">
                   <div className="flex items-center gap-1.5">
                     <span className="h-2.5 w-2.5 rounded-full bg-[#10b981]" />
-                    <span className="text-muted-foreground">Paid: ${totalPaidFees.toLocaleString()}</span>
+                    <span className="text-muted-foreground">Paid: ₹{totalPaidFees.toLocaleString()}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="h-2.5 w-2.5 rounded-full bg-[#f43f5e]" />
-                    <span className="text-muted-foreground">Pending: ${totalDueFees.toLocaleString()}</span>
+                    <span className="text-muted-foreground">Pending: ₹{totalDueFees.toLocaleString()}</span>
                   </div>
                 </div>
               </>
@@ -691,7 +695,7 @@ export function ParentDashboard() {
         </Card>
 
         {/* Notices Board & Quick Updates */}
-        <Card className="rounded-3xl border shadow-sm flex flex-col bg-gradient-to-br from-card to-rose-500/[0.01]">
+        <Card className="rounded-3xl border shadow-sm flex flex-col bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Megaphone className="h-5 w-5 text-rose-500" />

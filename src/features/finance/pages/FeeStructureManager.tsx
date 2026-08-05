@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query"
 import { Link } from "react-router-dom"
-import { Plus, Loader2, Trash2, DollarSign, Calendar, Info } from "lucide-react"
+import { Plus, Loader2, Trash2, IndianRupee, Calendar, Info } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -177,7 +177,7 @@ export function FeeStructureManager({ embedded = false }: FeeStructureManagerPro
         <Card className="border-primary/30 shadow-md">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-primary" />
+              <IndianRupee className="h-5 w-5 text-primary" />
               Create Fee Structure
             </CardTitle>
             <CardDescription>Define a recurring or one-time fee plan.</CardDescription>
@@ -261,7 +261,7 @@ export function FeeStructureManager({ embedded = false }: FeeStructureManagerPro
       {/* Fee structure cards grouped by class and term — hidden for accountant/HA (yearly panel above) */}
       {!showYearlyOnly && groupedStructures.length === 0 && !creating ? (
         <div className="flex flex-col items-center justify-center py-16 border-2 border-dashed rounded-xl text-muted-foreground">
-          <DollarSign className="h-14 w-14 opacity-30 mb-4" />
+          <IndianRupee className="h-14 w-14 opacity-30 mb-4" />
           <h3 className="text-lg font-semibold text-foreground">No fee structures</h3>
           <p className="text-sm mt-1 max-w-md text-center">
             {isHeadAccountant
@@ -314,7 +314,7 @@ export function FeeStructureManager({ embedded = false }: FeeStructureManagerPro
                         </CardHeader>
                         <CardContent className="flex-1 space-y-2 text-sm">
                           <div className="flex items-center gap-2 text-muted-foreground">
-                            <DollarSign className="h-3.5 w-3.5" />
+                            <IndianRupee className="h-3.5 w-3.5" />
                             <span className="font-semibold text-foreground text-lg">
                               ₹{Number(fs.amount).toLocaleString()}
                             </span>
@@ -352,7 +352,7 @@ export function FeeStructureManager({ embedded = false }: FeeStructureManagerPro
         </div>
       ) : showYearlyOnly && approvedPlans.length === 0 && !creating ? (
         <div className="flex flex-col items-center justify-center py-16 border-2 border-dashed rounded-xl text-muted-foreground">
-          <DollarSign className="h-14 w-14 opacity-30 mb-4" />
+          <IndianRupee className="h-14 w-14 opacity-30 mb-4" />
           <h3 className="text-lg font-semibold text-foreground">No approved fee plans</h3>
           <p className="text-sm mt-1 max-w-md text-center">
             {isHeadAccountant

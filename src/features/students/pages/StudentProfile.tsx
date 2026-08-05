@@ -383,7 +383,7 @@ export function StudentProfile({ portalMode = false, studentIdOverride }: Studen
           </CardHeader>
           <CardContent>
             <div className={`text-xl font-bold ${totalPending > 0 ? "text-destructive" : "text-green-600"}`}>
-              ${totalPending.toLocaleString()}
+              ₹{totalPending.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               {student.invoices.length} invoice(s)

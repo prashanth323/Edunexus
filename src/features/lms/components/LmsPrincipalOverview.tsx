@@ -126,40 +126,46 @@ export function LmsPrincipalOverview() {
           description={`${o.coursesPublished} published · ${o.coursesDraft} draft`}
           icon={BookOpen}
           onClick={() => setShowCourses(true)}
+          color="violet"
         />
-        <DashboardStatCard title="Course lessons" value={o.lessonsTotal} icon={Layers} />
+        <DashboardStatCard title="Course lessons" value={o.lessonsTotal} icon={Layers} color="violet" />
         <DashboardStatCard
           title="Learning-path assignments"
           value={o.assignmentsTotal}
           description={`${o.assignmentsPublished} published — tasks inside LMS courses`}
           icon={ClipboardList}
+          color="violet"
         />
         <DashboardStatCard
           title="Daily homework tasks"
           value={o.homeworkTotal ?? 0}
           description={`${o.homeworkPublished ?? 0} published — section roster`}
           icon={NotebookPen}
+          color="violet"
         />
-        <DashboardStatCard title="Study materials" value={o.studyMaterialsTotal} icon={FileStack} />
-        <DashboardStatCard title="Subjects" value={o.subjectsTotal} icon={BookMarked} />
+        <DashboardStatCard title="Study materials" value={o.studyMaterialsTotal} icon={FileStack} color="violet" />
+        <DashboardStatCard title="Subjects" value={o.subjectsTotal} icon={BookMarked} color="violet" />
         <DashboardStatCard
           title="Active enrollments"
           value={o.activeEnrollments}
           description="Students enrolled in sections (active)"
           icon={Users}
+          color="violet"
         />
         <DashboardStatCard
           title="Course submission slots"
           value={o.submissionsRows}
           description={`${o.submissionsFiled} filed for LMS assignments`}
           icon={Send}
+          color="violet"
         />
-        <DashboardStatCard title="Exams" value={o.examsTotal} icon={Trophy} />
+        <DashboardStatCard title="Exams" value={o.examsTotal} icon={Trophy} color="violet" />
         <DashboardStatCard
           title="Daily homework submissions"
           value={o.homeworkSubmissionsRows ?? 0}
           description={`${o.homeworkSubmissionsFiled ?? 0} filed`}
           icon={Send}
+          color="violet"
         />
       </div>
 

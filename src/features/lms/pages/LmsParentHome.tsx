@@ -168,7 +168,7 @@ export function LmsParentHome() {
             </Badge>
             {selectedChild.pending_fees != null && selectedChild.pending_fees > 0 && (
               <Badge variant="outline" className="px-3.5 py-1.5 rounded-xl border-rose-500/20 bg-rose-500/5 text-rose-600 font-bold text-xs">
-                Dues: ${Number(selectedChild.pending_fees).toLocaleString()}
+                Dues: ₹{Number(selectedChild.pending_fees).toLocaleString()}
               </Badge>
             )}
           </div>

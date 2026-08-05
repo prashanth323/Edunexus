@@ -2,6 +2,7 @@ import { Link } from "react-router-dom"
 import { Home } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 
+import { DashboardStatCard } from "@/components/dashboard/StatCard"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
@@ -36,22 +37,18 @@ export function HostelManagerDashboard() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Active residents</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{residents.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">On leave</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{away}</div>
-          </CardContent>
-        </Card>
+        <DashboardStatCard
+          title="Active residents"
+          value={residents.length}
+          icon={Home}
+          color="violet"
+        />
+        <DashboardStatCard
+          title="On leave"
+          value={away}
+          icon={Home}
+          color="purple"
+        />
       </div>
 
       <Card>

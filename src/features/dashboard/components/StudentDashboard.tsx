@@ -6,6 +6,7 @@ import { Link } from "react-router-dom"
 import { Card, CardContent, CardDescription, CardFooter, CardGrid, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatCardSkeletonGrid } from "@/components/ui/card-skeleton"
 import { Button } from "@/components/ui/button"
+import { DashboardStatCard } from "@/components/dashboard/StatCard"
 import { ClassTeacherCard } from "@/components/school/ClassTeacherCard"
 import { useAuth } from "@/features/auth/hooks/useAuth"
 import { getStudentClassTeacher } from "@/features/students/api/studentService.api"
@@ -206,11 +207,17 @@ export function StudentDashboard() {
       animate="visible"
       variants={pageV}
     >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Student home</h1>
-          <p className="text-muted-foreground mt-1">
-            Your dashboard — classes, attendance, and school communications.
+      <div className="relative overflow-hidden rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-card">
+        <img src="/dashboard_premium_banner.png" alt="Premium Banner" className="absolute inset-0 w-full h-full object-cover opacity-15 pointer-events-none mix-blend-multiply dark:mix-blend-screen" />
+        <div className="absolute inset-0 bg-gradient-to-r from-white/95 via-white/80 to-transparent dark:from-background/95 dark:via-background/80 z-0 pointer-events-none" />
+        
+        <div className="relative space-y-2 z-10">
+          <h1 className="text-3xl font-extrabold tracking-tight flex items-center gap-3 text-emerald-700 dark:text-emerald-400">
+            <GraduationCap className="h-9 w-9" />
+            Student home
+          </h1>
+          <p className="text-emerald-900/70 dark:text-emerald-200/70 text-sm sm:text-base max-w-2xl">
+            Welcome back! Here is an overview of your classes, attendance, and school communications.
           </p>
         </div>
       </div>
@@ -251,22 +258,19 @@ export function StudentDashboard() {
                 </motion.div>
               ) : null}
 
-              <Card variants={staggerI}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">My class</CardTitle>
-                  <GraduationCap className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {info.class_name
+              <motion.div variants={staggerI}>
+                <DashboardStatCard
+                  title="My class"
+                  value={
+                    info.class_name
                       ? `${info.class_name}${info.section_name ? ` - ${info.section_name}` : ""}`
-                      : "Not enrolled"}
-                  </div>
-                  {info.academic_year && (
-                    <p className="text-xs text-muted-foreground mt-1">{info.academic_year}</p>
-                  )}
-                </CardContent>
-              </Card>
+                      : "Not enrolled"
+                  }
+                  description={info.academic_year ? info.academic_year : undefined}
+                  icon={GraduationCap}
+                  color="violet"
+                />
+              </motion.div>
 
               {info.class_name && (
                 <motion.div variants={staggerI} className="col-span-full sm:col-span-2 lg:col-span-3">
@@ -278,71 +282,58 @@ export function StudentDashboard() {
                 </motion.div>
               )}
 
-              <Card variants={staggerI}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Attendance (this month)</CardTitle>
-                  <CalendarCheck className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {info.attendance_pct_this_month != null
+              <motion.div variants={staggerI}>
+                <DashboardStatCard
+                  title="Attendance (this month)"
+                  value={
+                    info.attendance_pct_this_month != null
                       ? `${info.attendance_pct_this_month}%`
-                      : "—"}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {info.attendance_pct_this_month != null ? "Current month" : "No records yet"}
-                  </p>
-                </CardContent>
-              </Card>
+                      : "—"
+                  }
+                  description={info.attendance_pct_this_month != null ? "Current month" : "No records yet"}
+                  icon={CalendarCheck}
+                  color="violet"
+                />
+              </motion.div>
 
-              <Card variants={staggerI}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Pending fees</CardTitle>
-                  <CreditCard className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    ${Number(info.pending_fees ?? 0).toLocaleString()}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {Number(info.pending_fees ?? 0) > 0 ? "Outstanding balance" : "All clear"}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card variants={staggerI}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Homework today</CardTitle>
-                  <BookOpen className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{info.homework_due_today}</div>
-                  <p className="text-xs text-muted-foreground mt-1">Due today for your section</p>
-                </CardContent>
-              </Card>
+              <motion.div variants={staggerI}>
+                <DashboardStatCard
+                  title="Pending fees"
+                  value={`₹${Number(info.pending_fees ?? 0).toLocaleString()}`}
+                  description={Number(info.pending_fees ?? 0) > 0 ? "Outstanding balance" : "All clear"}
+                  icon={CreditCard}
+                  color="violet"
+                />
+              </motion.div>
+              <motion.div variants={staggerI}>
+                <DashboardStatCard
+                  title="Homework today"
+                  value={info.homework_due_today}
+                  description="Due today for your section"
+                  icon={BookOpen}
+                  color="violet"
+                />
+              </motion.div>
 
-              <Card variants={staggerI}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Upcoming exams</CardTitle>
-                  <ClipboardList className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{info.upcoming_exams}</div>
-                  <p className="text-xs text-muted-foreground mt-1">Scheduled for your section</p>
-                </CardContent>
-              </Card>
+              <motion.div variants={staggerI}>
+                <DashboardStatCard
+                  title="Upcoming exams"
+                  value={info.upcoming_exams}
+                  description="Scheduled for your section"
+                  icon={ClipboardList}
+                  color="purple"
+                />
+              </motion.div>
 
-              <Card variants={staggerI}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Performance</CardTitle>
-                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {info.attendance_pct_this_month != null ? `${info.attendance_pct_this_month}%` : "—"}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">Attendance this month</p>
-                </CardContent>
-              </Card>
+              <motion.div variants={staggerI}>
+                <DashboardStatCard
+                  title="Performance"
+                  value={info.attendance_pct_this_month != null ? `${info.attendance_pct_this_month}%` : "—"}
+                  description="Attendance this month"
+                  icon={TrendingUp}
+                  color="purple"
+                />
+              </motion.div>
             </CardGrid>
           </motion.div>
         ) : null}

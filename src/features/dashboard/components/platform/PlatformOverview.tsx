@@ -23,6 +23,7 @@ import {
   getPlatformStats,
   queryKeys,
 } from "../../api/platform.api"
+import { DashboardStatCard } from "@/components/dashboard/StatCard"
 
 const CHART_ANALYTICS_DAYS = 14
 
@@ -132,49 +133,34 @@ export function PlatformOverview() {
 
       {stats ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Schools</CardTitle>
-              <GraduationCap className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.schools}</div>
-              <p className="text-xs text-muted-foreground mt-1">Active schools (non-deleted)</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Students</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.students}</div>
-              <p className="text-xs text-muted-foreground mt-1">Across all schools</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Staff records</CardTitle>
-              <UserSquare2 className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.staff}</div>
-              <p className="text-xs text-muted-foreground mt-1">Staff directory rows</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Platform Users</CardTitle>
-              <ShieldAlert className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.platformUsers}</div>
-              <p className="text-xs text-muted-foreground mt-1">Users with platform roles</p>
-            </CardContent>
-          </Card>
+          <DashboardStatCard
+            title="Schools"
+            value={stats.schools}
+            description="Active schools (non-deleted)"
+            icon={GraduationCap}
+            color="violet"
+          />
+          <DashboardStatCard
+            title="Students"
+            value={stats.students}
+            description="Across all schools"
+            icon={Users}
+            color="violet"
+          />
+          <DashboardStatCard
+            title="Staff records"
+            value={stats.staff}
+            description="Staff directory rows"
+            icon={UserSquare2}
+            color="violet"
+          />
+          <DashboardStatCard
+            title="Platform Users"
+            value={stats.platformUsers}
+            description="Users with platform roles"
+            icon={ShieldAlert}
+            color="purple"
+          />
         </div>
       ) : null}
 

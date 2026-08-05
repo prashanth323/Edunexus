@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { Moon, Sun, GraduationCap, LogOut, User as UserIcon, Building2, Menu } from "lucide-react"
 import { toast } from "sonner"
+import { motion, AnimatePresence } from "framer-motion"
 
 import { useTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
@@ -97,9 +98,9 @@ export function AppShell() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-14 items-center justify-between px-4 md:px-8 max-w-full gap-2">
-          <div className="flex items-center gap-2 font-bold text-primary min-w-0">
+      <header className="sticky top-0 z-40 w-full border-b border-border/40 bg-white/95 dark:bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] transition-all duration-300">
+        <div className="container flex h-16 items-center justify-between px-4 md:px-8 max-w-full gap-2">
+          <div className="flex items-center gap-3 font-bold text-primary min-w-0">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon" className="md:hidden shrink-0" aria-label="Open navigation menu">
@@ -124,8 +125,10 @@ export function AppShell() {
                 })}
               </DropdownMenuContent>
             </DropdownMenu>
-            <GraduationCap className="h-6 w-6 shrink-0" />
-            <span className="text-xl hidden md:inline-block">EduNexus</span>
+            <div className="flex items-center gap-2.5">
+              <img src="/logo.png" alt="EduNexus Logo" className="h-12 w-auto shrink-0 object-contain drop-shadow-md" />
+              <span className="text-2xl font-extrabold tracking-tight hidden md:inline-block text-primary">EduNexus</span>
+            </div>
           </div>
 
           <div className="flex items-center gap-2 md:gap-4 min-w-0 justify-end">
@@ -224,7 +227,18 @@ export function AppShell() {
             activeRole === "student" && "student-surface bg-background text-foreground",
           )}
         >
-          <Outlet />
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.3, ease: "easeInOut" }}
+              className="h-full"
+            >
+              <Outlet />
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
     </div>

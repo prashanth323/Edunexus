@@ -269,26 +269,29 @@ export function TransportOverview() {
 
         <TabsContent value="overview" className="mt-4 space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <DashboardStatCard title="Buses" value={o.busesTotal} description={`${o.busesActive} active`} icon={Bus} />
-        <DashboardStatCard title="Routes" value={o.routesTotal} description={`${o.routesActive} active`} icon={Route} />
+        <DashboardStatCard title="Buses" value={o.busesTotal} description={`${o.busesActive} active`} icon={Bus} color="violet" />
+        <DashboardStatCard title="Routes" value={o.routesTotal} description={`${o.routesActive} active`} icon={Route} color="violet" />
         <DashboardStatCard
           title="Fleet seats"
           value={o.fleetSeatCapacity}
           description="Sum of bus capacities"
           icon={Gauge}
+          color="violet"
         />
         <DashboardStatCard
           title="Students on routes"
           value={o.routeStudentsCount}
           description="Route assignments"
           icon={Users}
+          color="violet"
         />
-        <DashboardStatCard title="Route stops" value={o.routeStopsCount} icon={MapPin} />
+        <DashboardStatCard title="Route stops" value={o.routeStopsCount} icon={MapPin} color="violet" />
         <DashboardStatCard
           title="Inactive buses"
           value={o.busesInactive}
           description="Not in active service"
           icon={Bus}
+          color="violet"
         />
       </div>
 

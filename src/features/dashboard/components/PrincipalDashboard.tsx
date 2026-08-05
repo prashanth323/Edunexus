@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query"
 import {
   Users,
   UserCheck,
-  DollarSign,
+  IndianRupee,
   Target,
   Percent,
   Wallet,
@@ -243,66 +243,78 @@ export function PrincipalDashboard({
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
-          <p className="text-muted-foreground mt-1">{subtitle}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" asChild>
-            <Link to="/attendance">
-              <CalendarCheck className="h-4 w-4 mr-1.5" />
-              Attendance
-            </Link>
-          </Button>
-          <Button variant="outline" size="sm" asChild>
-            <Link to="/finance">
-              <Receipt className="h-4 w-4 mr-1.5" />
-              Finance
-            </Link>
-          </Button>
-          <Button size="sm" asChild>
-            <Link to="/crm">
-              <Target className="h-4 w-4 mr-1.5" />
-              Admissions
-            </Link>
-          </Button>
+      <div className="relative overflow-hidden rounded-2xl p-8 border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-card">
+        <img src="/dashboard_premium_banner.png" alt="Premium Banner" className="absolute inset-0 w-full h-full object-cover opacity-15 pointer-events-none mix-blend-multiply dark:mix-blend-screen" />
+        <div className="absolute inset-0 bg-gradient-to-r from-white/95 via-white/80 to-transparent dark:from-background/95 dark:via-background/80 z-0 pointer-events-none" />
+        
+        <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 z-10">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3 text-primary">
+              <GraduationCap className="h-8 w-8" />
+              {title}
+            </h1>
+            <p className="text-muted-foreground mt-2 max-w-lg">{subtitle}</p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Button variant="secondary" size="sm" className="shadow-sm hover:shadow-md transition-shadow" asChild>
+              <Link to="/attendance">
+                <CalendarCheck className="h-4 w-4 mr-2 text-primary" />
+                Attendance
+              </Link>
+            </Button>
+            <Button variant="secondary" size="sm" className="shadow-sm hover:shadow-md transition-shadow" asChild>
+              <Link to="/finance">
+                <Receipt className="h-4 w-4 mr-2 text-primary" />
+                Finance
+              </Link>
+            </Button>
+            <Button size="sm" className="shadow-sm hover:shadow-md transition-shadow bg-primary text-primary-foreground hover:bg-primary/90" asChild>
+              <Link to="/crm">
+                <Target className="h-4 w-4 mr-2" />
+                Admissions
+              </Link>
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* KPI strip */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <DashboardStatCard title="Students" value={s.total_students ?? 0} icon={Users} />
-        <DashboardStatCard title="Teachers" value={s.teacher_count ?? 0} icon={UserCheck} description="Active teaching staff" />
+        <DashboardStatCard title="Students" value={s.total_students ?? 0} icon={Users} color="violet" />
+        <DashboardStatCard title="Teachers" value={s.teacher_count ?? 0} icon={UserCheck} description="Active teaching staff" color="violet" />
         <DashboardStatCard
           title="Attendance today"
           displayValue={`${todayRate}%`}
           icon={Percent}
           description={`${attendance.today.present}/${attendance.today.total} present`}
+          color="violet"
         />
         <DashboardStatCard
           title="Collected (month)"
           displayValue={fmtMoney(s.collections_this_month)}
-          icon={DollarSign}
+          icon={IndianRupee}
           description="Fee receipts this month"
+          color="purple"
         />
         <DashboardStatCard
           title="Pending fees"
           displayValue={fmtMoney(s.total_pending_fees)}
           icon={Wallet}
           description={`${finance.openInvoicesCount} open invoices`}
+          color="purple"
         />
         <DashboardStatCard
           title="Active leads"
           value={s.active_leads ?? 0}
           icon={Target}
           description={`${s.admissions_this_month ?? 0} admitted this month`}
+          color="purple"
         />
       </div>
 
       {/* Attendance + Revenue row */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
+        <Card className="shadow-soft hover:shadow-premium transition-shadow duration-300">
           <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
             <div>
               <CardTitle className="flex items-center gap-2">
@@ -362,10 +374,10 @@ export function PrincipalDashboard({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-soft hover:shadow-premium transition-shadow duration-300">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
+              <IndianRupee className="h-5 w-5 text-green-600 dark:text-green-400" />
               Revenue collection
             </CardTitle>
             <CardDescription>
@@ -414,7 +426,7 @@ export function PrincipalDashboard({
 
       {/* Distribution row */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
+        <Card className="shadow-soft hover:shadow-premium transition-shadow duration-300">
           <CardHeader>
             <CardTitle>Today&apos;s attendance mix</CardTitle>
             <CardDescription>Status breakdown for the selected period</CardDescription>
@@ -446,7 +458,7 @@ export function PrincipalDashboard({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-soft hover:shadow-premium transition-shadow duration-300">
           <CardHeader>
             <CardTitle>Invoice health</CardTitle>
             <CardDescription>{finance.totalInvoicesCount} invoices tracked</CardDescription>
@@ -478,7 +490,7 @@ export function PrincipalDashboard({
           </CardContent>
         </Card>
 
-        <Card className="md:col-span-2 lg:col-span-1">
+        <Card className="md:col-span-2 lg:col-span-1 shadow-soft hover:shadow-premium transition-shadow duration-300">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <GraduationCap className="h-5 w-5 text-primary" />
@@ -513,7 +525,7 @@ export function PrincipalDashboard({
 
       {/* Admissions + quick actions */}
       <div className="grid gap-4 lg:grid-cols-7">
-        <Card className="lg:col-span-4">
+        <Card className="lg:col-span-4 shadow-soft hover:shadow-premium transition-shadow duration-300">
           <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
             <div>
               <CardTitle>Admissions pipeline</CardTitle>
@@ -544,7 +556,7 @@ export function PrincipalDashboard({
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-3">
+        <Card className="lg:col-span-3 shadow-soft hover:shadow-premium transition-shadow duration-300">
           <CardHeader>
             <CardTitle>Quick actions</CardTitle>
             <CardDescription>Jump to key modules</CardDescription>
